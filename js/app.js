@@ -23,8 +23,15 @@ import {
 
 import {
     initOrUpdateDashboardChart,
-    renderAnalisisEconomicoCharts
+    renderAnalisisEconomicoCharts,
+    renderBenchmarkCharts
 } from './charts.js';
+
+import {
+    obtenerBenchmarkSectorial,
+    consultarCompetenciaLocalOSM,
+    generarDiagnosticoPosicionamiento
+} from './benchmark.js';
 
 import {
     generarHuellaVerifactu,
@@ -229,7 +236,7 @@ function switchTab(tabId) {
 
     const grupoVentas = ['ingresos', 'presupuestos', 'clientes'];
     const grupoCompras = ['facturas-recibidas', 'gastos-simples'];
-    const grupoGestion = ['tesoreria', 'analisis-economico', 'resumen-trimestral', 'aeat', 'perfil'];
+    const grupoGestion = ['tesoreria', 'analisis-economico', 'posicionamiento', 'resumen-trimestral', 'aeat', 'perfil'];
 
     document.getElementById('mobile-subnav-ventas').classList.toggle('!hidden', !grupoVentas.includes(tabId));
     document.getElementById('mobile-subnav-compras').classList.toggle('!hidden', !grupoCompras.includes(tabId));
@@ -251,6 +258,7 @@ function switchTab(tabId) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (tabId === 'aeat') updateAEATView();
     if (tabId === 'analisis-economico') renderAnalisisEconomicoCharts(state);
+    if (tabId === 'posicionamiento') renderPosicionamiento();
     if (tabId === 'presupuestos') renderPresupuestos();
 }
 
@@ -2067,6 +2075,111 @@ function importJSON() {
     reader.readAsText(file);
 }
 
+
+/* ================= EVALUADOR DE POSICIONAMIENTO SECTORIAL Y RADAR LOCAL ================= */
+function calcularMetricasPropiasEjercicio() {
+    const anioAct = String(state.ejercicioActivo || 2026);
+    const ingAnio = state.ingresos.filter(i => String(i.fecha || '').startsWith(anioAct) && i.tipoDocumento !== 'rectificativa');
+    const gasAnio = state.gastos.filter(g => String(g.fecha || '').startsWith(anioAct));
+
+    const ingresosAnuales = ingAnio.reduce((s, i) => s + (Number(i.base) || 0), 0);
+    const gastosAnuales = gasAnio.reduce((s, g) => s + (Number(g.baseIrpf) || 0), 0);
+    const beneficioAnual = ingresosAnuales - gastosAnuales;
+
+    // Trimestres con actividad (mínimo 1 para media trimestral realista)
+    const trimestresActivos = Math.max(1, new Set(ingAnio.map(i => i.trimestre)).size);
+    const facturacionTrimestralMedia = ingresosAnuales / trimestresActivos;
+    const ticketMedio = ingAnio.length > 0 ? ingresosAnuales / ingAnio.length : 0;
+
+    const ratioGastosPct = ingresosAnuales > 0 ? Math.min(100, Math.max(0, (gastosAnuales / ingresosAnuales) * 100)) : 0;
+    const margenNetoPct = ingresosAnuales > 0 ? Math.max(-100, (beneficioAnual / ingresosAnuales) * 100) : 0;
+
+    return {
+        anioAct,
+        ingresosAnuales,
+        gastosAnuales,
+        beneficioAnual,
+        facturacionTrimestralMedia,
+        ticketMedio,
+        numFacturas: ingAnio.length,
+        ratioGastosPct,
+        margenNetoPct
+    };
+}
+
+function renderPosicionamiento() {
+    const bench = obtenerBenchmarkSectorial(state.perfil, CATALOGO_IAE);
+    const tusMetricas = calcularMetricasPropiasEjercicio();
+
+    document.getElementById('bench-subtitulo').textContent = `${bench.iaeNombre} · Municipio: ${bench.ciudad} · Ejercicio ${tusMetricas.anioAct}`;
+    document.getElementById('radar-ciudad-nombre').textContent = bench.ciudad;
+
+    document.getElementById('bench-tu-margen').textContent = `${tusMetricas.margenNetoPct.toFixed(1)}%`;
+    document.getElementById('bench-sector-margen').textContent = `Media ${bench.sector}: ${bench.margenNetoPct}%`;
+
+    document.getElementById('bench-tu-gastos').textContent = `${tusMetricas.ratioGastosPct.toFixed(1)}%`;
+    document.getElementById('bench-sector-gastos').textContent = `Media ${bench.sector}: ${bench.ratioGastosPct}%`;
+
+    document.getElementById('bench-tu-ticket').textContent = formatEur(tusMetricas.ticketMedio);
+    document.getElementById('bench-sector-ticket').textContent = `Media ${bench.ciudad}: ${formatEur(bench.ticketMedio)}`;
+
+    const diagnosticos = generarDiagnosticoPosicionamiento(tusMetricas, bench);
+    document.getElementById('bench-diagnostico-lista').innerHTML = diagnosticos.map(d => {
+        const estilos = d.tipo === 'ok'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+            : (d.tipo === 'alerta' ? 'bg-rose-50 border-rose-200 text-rose-900' : 'bg-blue-50 border-blue-200 text-blue-900');
+        const icono = d.tipo === 'ok' ? 'fa-circle-check text-emerald-600' : (d.tipo === 'alerta' ? 'fa-triangle-exclamation text-rose-600' : 'fa-circle-info text-blue-600');
+        return `<article class="rounded-xl border p-4 ${estilos} space-y-1">
+            <h4 class="font-extrabold text-xs sm:text-sm flex items-center gap-2"><i class="fa-solid ${icono}"></i>${d.titulo}</h4>
+            <p class="text-xs opacity-90 leading-relaxed">${d.texto}</p>
+        </article>`;
+    }).join('');
+
+    renderBenchmarkCharts(tusMetricas, bench);
+}
+
+async function ejecutarRadarLocal() {
+    const bench = obtenerBenchmarkSectorial(state.perfil, CATALOGO_IAE);
+    const btn = document.getElementById('btn-radar-local');
+    const badge = document.getElementById('radar-status-badge');
+    const grid = document.getElementById('radar-negocios-grid');
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Consultando registros...';
+    badge.textContent = 'Buscando en OpenStreetMap...';
+    badge.className = 'text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1 rounded-full';
+
+    try {
+        const res = await consultarCompetenciaLocalOSM(state.perfil.ciudad, bench.sector, bench.osmTags);
+        document.getElementById('bench-competidores-count').textContent = String(res.totalDetectados);
+        document.getElementById('bench-competidores-ciudad').textContent = `En radio ${res.radioKm} km (${res.ciudadOficial})`;
+
+        badge.textContent = `${res.totalDetectados} registros encontrados`;
+        badge.className = 'text-xs font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full';
+
+        if (res.muestraNegocios.length) {
+            grid.innerHTML = res.muestraNegocios.map(neg => `
+                <div class="border rounded-xl p-3 bg-slate-50 flex items-start gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 grid place-items-center shrink-0 text-xs"><i class="fa-solid fa-building"></i></div>
+                    <div class="min-w-0 flex-1">
+                        <p class="font-bold text-xs text-slate-900 truncate">${neg.nombre}</p>
+                        <p class="text-[10px] text-slate-500 capitalize truncate">${neg.categoria} · ${neg.direccion}</p>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            grid.innerHTML = `<p class="text-xs text-slate-500 col-span-full py-3">Se detectaron ${res.totalDetectados} nodos de actividad en ${res.ciudadOficial}, aunque sin nombre comercial público registrado en el mapa.</p>`;
+        }
+    } catch (err) {
+        badge.textContent = 'Error en consulta';
+        badge.className = 'text-xs font-bold bg-rose-100 text-rose-800 px-3 py-1 rounded-full';
+        grid.innerHTML = `<p class="text-xs text-rose-600 col-span-full py-3"><i class="fa-solid fa-triangle-exclamation mr-1"></i>${err.message}</p>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-satellite-dish mr-1.5"></i> Actualizar Radar Ciudad';
+    }
+}
+
 /* Exponer funciones globales requeridas por los atributos onclick/onsubmit del HTML */
 Object.assign(window, {
     switchTab,
@@ -2126,5 +2239,7 @@ Object.assign(window, {
     importJSON,
     abrirAdjuntoIDB,
     autoTrimestre,
-    renderAnalisisEconomico: () => renderAnalisisEconomicoCharts(state)
+    renderAnalisisEconomico: () => renderAnalisisEconomicoCharts(state),
+    renderPosicionamiento,
+    ejecutarRadarLocal
 });

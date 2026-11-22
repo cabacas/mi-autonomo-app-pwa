@@ -152,3 +152,73 @@ export function renderAnalisisEconomicoCharts(state) {
         });
     }
 }
+
+let chartBenchEconomico = null;
+let chartBenchMargenes = null;
+
+export function renderBenchmarkCharts(tusMetricas, bench) {
+    if (typeof Chart === 'undefined') return;
+
+    // Gráfica 1: Comparativa económica (Tu negocio vs Media Sector en tu Ciudad)
+    const ctx1 = document.getElementById('chartBenchEconomico');
+    if (ctx1) {
+        if (chartBenchEconomico) chartBenchEconomico.destroy();
+        chartBenchEconomico = new Chart(ctx1.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['Facturación Trim. Media', 'Ticket Medio Factura'],
+                datasets: [
+                    {
+                        label: 'Tu Negocio (€)',
+                        data: [tusMetricas.facturacionTrimestralMedia, tusMetricas.ticketMedio],
+                        backgroundColor: '#2563eb',
+                        borderRadius: 6
+                    },
+                    {
+                        label: `Media Sector en ${bench.ciudad} (€)`,
+                        data: [bench.facturacionTrimestralMedia, bench.ticketMedio],
+                        backgroundColor: '#94a3b8',
+                        borderRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+
+    // Gráfica 2: Estructura de Rentabilidad (% Margen Neto vs % Gastos)
+    const ctx2 = document.getElementById('chartBenchMargenes');
+    if (ctx2) {
+        if (chartBenchMargenes) chartBenchMargenes.destroy();
+        chartBenchMargenes = new Chart(ctx2.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['Margen Neto (%)', 'Ratio Gastos (%)'],
+                datasets: [
+                    {
+                        label: 'Tu Negocio (%)',
+                        data: [Number(tusMetricas.margenNetoPct.toFixed(1)), Number(tusMetricas.ratioGastosPct.toFixed(1))],
+                        backgroundColor: ['#10b981', '#f43f5e'],
+                        borderRadius: 6
+                    },
+                    {
+                        label: `Referencia ${bench.sector} (%)`,
+                        data: [bench.margenNetoPct, bench.ratioGastosPct],
+                        backgroundColor: ['#a7f3d0', '#fecdd3'],
+                        borderRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100 } },
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+}
