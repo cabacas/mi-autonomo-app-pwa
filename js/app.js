@@ -1349,8 +1349,8 @@ function generarFacturaPDF(id) {
                     <div class="doc-badge"><span>Factura</span></div>
                     <div style="font-size:8px;color:#64748b;margin-top:4px;font-weight:600;">QR Tributario · Veri*factu</div>
                 </div>
-                <div style="width:54px;height:54px;border:1px solid #cbd5e1;padding:2px;background:#fff;border-radius:4px;">
-                    ${generarQRTributarioSVG(f.verifactu?.urlCotejoAEAT || ('AEAT|' + (state.perfil.nif||'') + '|' + f.numero + '|' + f.total))}
+                <div style="width:68px;height:68px;border:1px solid #cbd5e1;padding:3px;background:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;">
+                    ${generarQRTributarioSVG(f.verifactu?.urlCotejoAEAT || ('https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif=' + encodeURIComponent(state.perfil.nif||'') + '&numserie=' + encodeURIComponent(f.numero) + '&fecha=' + encodeURIComponent(f.fecha) + '&importe=' + Number(f.total||0).toFixed(2)))}
                 </div>
             </div>
         </header>
