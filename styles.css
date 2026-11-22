@@ -1,0 +1,213 @@
+:root {
+    color-scheme: light;
+}
+
+body {
+    background: #f3f6fc;
+    overflow-x: hidden;
+}
+
+.app-sidebar {
+    background: linear-gradient(180deg, #10264b 0%, #142f5b 100%);
+}
+
+.side-link {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+    padding: .68rem .85rem;
+    border-radius: .75rem;
+    color: #dbeafe;
+    font-size: .85rem;
+    text-align: left;
+    transition: background .18s ease, color .18s ease;
+}
+
+.side-link:hover {
+    background: rgba(255, 255, 255, .10);
+    color: white;
+}
+
+.side-link.active {
+    background: #1769e8;
+    color: white;
+    box-shadow: 0 8px 18px rgba(4, 35, 90, .22);
+}
+
+.app-card {
+    background: white;
+    border: 1px solid #e3eaf5;
+    border-radius: 1rem;
+    box-shadow: 0 3px 12px rgba(20, 48, 90, .045);
+}
+
+.metric-card {
+    position: relative;
+    overflow: hidden;
+    min-height: 124px;
+}
+
+.metric-icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    font-size: 1.05rem;
+}
+
+.chart-wrap {
+    position: relative;
+    height: 280px;
+    width: 100%;
+}
+
+.app-main {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.tab-content {
+    min-width: 0;
+}
+
+/* Navegación móvil estrictamente contenida en viewport */
+.mobile-bottom-nav {
+    display: none;
+}
+
+.mobile-subnav {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    .app-shell {
+        display: block !important;
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+
+    .app-sidebar {
+        display: none !important;
+    }
+
+    .app-main {
+        width: 100%;
+        max-width: 100vw;
+        padding: 0.85rem 0.85rem calc(5.5rem + env(safe-area-inset-bottom)) 0.85rem !important;
+    }
+
+    .mobile-bottom-nav {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        z-index: 45;
+        background: rgba(255, 255, 255, 0.97);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid #e2e8f0;
+        padding: 0.35rem 0.15rem calc(0.35rem + env(safe-area-inset-bottom));
+        box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.06);
+    }
+
+    .m-nav-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.18rem;
+        color: #64748b;
+        font-size: 0.65rem;
+        font-weight: 600;
+        padding: 0.25rem 0.1rem;
+        min-width: 0;
+    }
+
+    .m-nav-btn span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .m-nav-btn i {
+        font-size: 1.1rem;
+    }
+
+    .m-nav-btn.active {
+        color: #1d4ed8;
+        font-weight: 800;
+    }
+
+    .m-nav-fab {
+        width: 46px;
+        height: 46px;
+        border-radius: 9999px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        display: grid;
+        place-items: center;
+        font-size: 1.25rem;
+        margin: -18px auto 0;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38);
+        border: 3px solid white;
+    }
+
+    .mobile-subnav {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 0.35rem;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 0.25rem;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .mobile-subnav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .m-pill {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        padding: 0.4rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        background: white;
+        color: #475569;
+        border: 1px solid #cbd5e1;
+    }
+
+    .m-pill.active {
+        background: #1e3a8a;
+        color: white;
+        border-color: #1e3a8a;
+    }
+}
+
+@media (max-width: 520px) {
+    .chart-wrap {
+        height: 220px;
+    }
+}
+
+@media print {
+    .no-print,
+    .mobile-bottom-nav,
+    .mobile-subnav {
+        display: none !important;
+    }
+
+    body {
+        background: white;
+        font-size: 11pt;
+    }
+}

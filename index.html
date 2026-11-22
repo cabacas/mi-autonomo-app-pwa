@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Mi Autónomo - Gestor Fiscal y Contabilidad AEAT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <meta name="theme-color" content="#10264b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Mi Autónomo">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- CABECERA -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 w-full max-w-full overflow-hidden no-print">
+        <div class="px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2 w-full max-w-full">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+                <div class="w-9 h-9 rounded-xl bg-blue-600 text-white grid place-items-center text-base shrink-0"><i class="fa-solid fa-chart-line"></i></div>
+                <div class="min-w-0 flex-1">
+                    <h1 class="font-extrabold text-slate-900 text-sm sm:text-base leading-tight truncate">Mi Autónomo</h1>
+                    <p id="header-actividad-badge" class="text-[11px] text-slate-500 truncate">Gestor fiscal AEAT</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                                <button id="btn-install-pwa" onclick="instalarPWA()" class="hidden items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-full px-3 py-1.5 shadow-sm transition shrink-0">
+                    <i class="fa-solid fa-download"></i> <span>Instalar App</span>
+                </button>
+                <span class="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1"><i class="fa-solid fa-database"></i> IndexedDB Activo</span>
+                <button onclick="switchTab('perfil')" class="flex items-center gap-2 text-left rounded-full hover:bg-slate-50 p-1 pr-2 transition shrink-0">
+                    <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 grid place-items-center font-bold text-xs shrink-0"><i class="fa-solid fa-user"></i></div>
+                    <div class="hidden sm:block max-w-[130px] truncate">
+                        <p id="nav-autonomo-name" class="text-xs font-bold text-slate-800 leading-none truncate">Rafa Jiménez</p>
+                        <p id="nav-autonomo-ciudad" class="text-[10px] text-slate-500 mt-0.5 truncate">Terrassa</p>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-shell flex min-h-[calc(100vh-60px)]">
+        <!-- SIDEBAR ESCRITORIO -->
+        <aside id="main-sidebar" class="app-sidebar w-64 shrink-0 p-4 text-white no-print" aria-label="Menú principal">
+            <div class="px-3 pt-2 pb-4"><p class="text-[10px] uppercase tracking-[.18em] text-blue-200 font-bold">Espacio de trabajo</p><p class="text-sm text-blue-50 mt-0.5">Gestiona tu actividad</p></div>
+            <nav class="side-nav space-y-1">
+                <button class="side-link active" data-tab="dashboard" onclick="switchTab('dashboard')"><i class="fa-solid fa-house w-5"></i> Dashboard</button>
+                <button class="side-link" data-tab="tesoreria" onclick="switchTab('tesoreria')"><i class="fa-solid fa-wallet w-5"></i> Tesorería</button>
+                <div class="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-blue-300">Ventas</div>
+                <button class="side-link" data-tab="ingresos" onclick="switchTab('ingresos')"><i class="fa-solid fa-file-invoice-dollar w-5"></i> Facturas emitidas</button>
+                <button class="side-link" data-tab="presupuestos" onclick="switchTab('presupuestos')"><i class="fa-solid fa-file-signature w-5"></i> Presupuestos</button>
+                <button class="side-link" data-tab="clientes" onclick="switchTab('clientes')"><i class="fa-solid fa-address-book w-5"></i> Clientes</button>
+                <div class="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-blue-300">Compras y Gastos</div>
+                <button class="side-link" data-tab="facturas-recibidas" onclick="switchTab('facturas-recibidas')"><i class="fa-solid fa-file-invoice w-5"></i> Facturas recibidas</button>
+                <button class="side-link" data-tab="gastos-simples" onclick="switchTab('gastos-simples')"><i class="fa-solid fa-receipt w-5"></i> Gastos y tickets</button>
+                <div class="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-blue-300">Fiscal y Análisis</div>
+                <button class="side-link" data-tab="analisis-economico" onclick="switchTab('analisis-economico')"><i class="fa-solid fa-chart-column w-5"></i> Análisis económico</button>
+                <button class="side-link" data-tab="resumen-trimestral" onclick="switchTab('resumen-trimestral')"><i class="fa-solid fa-chart-pie w-5"></i> Cierres trimestrales</button>
+                <button class="side-link" data-tab="aeat" onclick="switchTab('aeat')"><i class="fa-solid fa-landmark w-5"></i> Modelos AEAT (303/130)</button>
+                <button class="side-link" data-tab="perfil" onclick="switchTab('perfil')"><i class="fa-solid fa-user-gear w-5"></i> Mi perfil y copias</button>
+            </nav>
+        </aside>
+
+        <main class="app-main flex-1 min-w-0 px-6 py-6 space-y-5">
+
+            <!-- SUBMENÚS PÍLDORA MÓVIL -->
+            <div id="mobile-subnav-ventas" class="mobile-subnav no-print !hidden">
+                <button type="button" class="m-pill active" data-subtab="ingresos" onclick="switchTab('ingresos')"><i class="fa-solid fa-file-invoice-dollar mr-1"></i>Facturas</button>
+                <button type="button" class="m-pill" data-subtab="presupuestos" onclick="switchTab('presupuestos')"><i class="fa-solid fa-file-signature mr-1"></i>Presupuestos</button>
+                <button type="button" class="m-pill" data-subtab="clientes" onclick="switchTab('clientes')"><i class="fa-solid fa-address-book mr-1"></i>Clientes</button>
+            </div>
+
+            <div id="mobile-subnav-compras" class="mobile-subnav no-print !hidden">
+                <button type="button" class="m-pill active" data-subtab="facturas-recibidas" onclick="switchTab('facturas-recibidas')"><i class="fa-solid fa-file-invoice mr-1"></i>Facturas recibidas</button>
+                <button type="button" class="m-pill" data-subtab="gastos-simples" onclick="switchTab('gastos-simples')"><i class="fa-solid fa-receipt mr-1"></i>Gastos y tickets</button>
+            </div>
+
+            <div id="mobile-subnav-gestion" class="mobile-subnav no-print !hidden">
+                <button type="button" class="m-pill active" data-subtab="tesoreria" onclick="switchTab('tesoreria')"><i class="fa-solid fa-wallet mr-1"></i>Tesorería</button>
+                <button type="button" class="m-pill" data-subtab="analisis-economico" onclick="switchTab('analisis-economico')"><i class="fa-solid fa-chart-column mr-1"></i>Análisis</button>
+                <button type="button" class="m-pill" data-subtab="resumen-trimestral" onclick="switchTab('resumen-trimestral')"><i class="fa-solid fa-chart-pie mr-1"></i>Trimestres</button>
+                <button type="button" class="m-pill" data-subtab="aeat" onclick="switchTab('aeat')"><i class="fa-solid fa-landmark mr-1"></i>AEAT</button>
+                <button type="button" class="m-pill" data-subtab="perfil" onclick="switchTab('perfil')"><i class="fa-solid fa-user-gear mr-1"></i>Perfil</button>
+            </div>
+
+            <!-- VISTA: DASHBOARD -->
+            <section id="tab-dashboard" class="tab-content space-y-5">
+                <div class="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-wider text-blue-600">PANEL DE CONTROL</p>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">¡Hola, <span id="dash-nombre">Rafa</span>! 👋</h2>
+                        <p id="dash-subtitulo-actividad" class="text-xs sm:text-sm text-slate-500 mt-0.5">Resumen de tu actividad · Ejercicio 2026</p>
+                    </div>
+                    <div class="hidden sm:flex items-center gap-2">
+                        <button onclick="openCompraModal('factura')" class="rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold px-3.5 py-2.5"><i class="fa-solid fa-file-invoice mr-1"></i> Factura recibida</button>
+                        <button onclick="openCompraModal('gasto')" class="rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-3.5 py-2.5"><i class="fa-solid fa-receipt mr-1"></i> Gasto / Ticket</button>
+                        <button onclick="openIngresoModal()" class="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 shadow-sm"><i class="fa-solid fa-plus mr-1"></i> Nueva factura</button>
+                    </div>
+                </div>
+
+                <div id="dash-regimen-banner" class="app-card p-3.5 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <div class="w-10 h-10 rounded-xl bg-blue-600 text-white grid place-items-center shrink-0"><i class="fa-solid fa-briefcase"></i></div>
+                        <div class="min-w-0 flex-1">
+                            <p id="dash-iae-titulo" class="text-xs sm:text-sm font-extrabold text-slate-900 truncate">Epígrafe 763 · Programadores y Analistas</p>
+                            <p id="dash-iae-detalle" class="text-[11px] text-slate-600 truncate">IVA 21% · Retención IRPF: 15% · Modelos: 303, 130</p>
+                        </div>
+                    </div>
+                    <button onclick="abrirOnboarding(true)" class="text-xs font-bold text-blue-700 hover:text-blue-900 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shrink-0">Cambiar actividad</button>
+                </div>
+
+                <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+                    <article class="app-card metric-card p-4"><div class="flex items-center justify-between"><p class="text-[11px] uppercase font-bold text-slate-500">Ingresos · Base</p><span class="metric-icon bg-emerald-50 text-emerald-600 hidden sm:grid"><i class="fa-solid fa-arrow-trend-up"></i></span></div><p id="dash-ingresos-base" class="text-lg sm:text-2xl font-extrabold text-slate-900 mt-2.5">0,00 €</p><p class="text-[11px] text-slate-500 mt-1"><span id="dash-ingresos-iva">0,00 €</span> IVA rep.</p></article>
+                    <article class="app-card metric-card p-4"><div class="flex items-center justify-between"><p class="text-[11px] uppercase font-bold text-slate-500">Compras + Gastos</p><span class="metric-icon bg-rose-50 text-rose-600 hidden sm:grid"><i class="fa-solid fa-arrow-trend-down"></i></span></div><p id="dash-gastos-base" class="text-lg sm:text-2xl font-extrabold text-slate-900 mt-2.5">0,00 €</p><p class="text-[11px] text-slate-500 mt-1"><span id="dash-gastos-iva">0,00 €</span> IVA deducible</p></article>
+                    <article class="app-card metric-card p-4"><div class="flex items-center justify-between"><p class="text-[11px] uppercase font-bold text-slate-500">Liquidación IVA</p><span class="metric-icon bg-amber-50 text-amber-600 hidden sm:grid"><i class="fa-solid fa-scale-balanced"></i></span></div><p id="dash-iva-resultado" class="text-lg sm:text-2xl font-extrabold text-slate-900 mt-2.5">0,00 €</p><p class="text-[11px] text-slate-500 mt-1">Acumulado Mod. 303</p></article>
+                    <article class="app-card metric-card p-4"><div class="flex items-center justify-between"><p class="text-[11px] uppercase font-bold text-slate-500">IRPF Acumulado</p><span class="metric-icon bg-blue-50 text-blue-600 hidden sm:grid"><i class="fa-solid fa-percent"></i></span></div><p id="dash-irpf-resultado" class="text-lg sm:text-2xl font-extrabold text-slate-900 mt-2.5">0,00 €</p><p class="text-[11px] text-slate-500 mt-1">Mod. 130 (desc. retenc.)</p></article>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <article class="app-card p-4 sm:p-5 xl:col-span-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3"><div><h3 class="font-extrabold text-slate-900">Evolución trimestral</h3><p class="text-xs text-slate-500">Ingresos frente a compras y gastos deducibles</p></div><span class="text-xs rounded-full bg-blue-50 text-blue-700 px-3 py-1 font-bold">2026</span></div>
+                        <div class="chart-wrap"><canvas id="chartTrimestres"></canvas></div>
+                    </article>
+                    <article class="app-card p-4 sm:p-5">
+                        <div class="flex items-center justify-between"><div><h3 class="font-extrabold text-slate-900">Tu tesorería</h3><p class="text-xs text-slate-500">Liquidez y reservas</p></div><span class="metric-icon bg-indigo-50 text-indigo-600"><i class="fa-solid fa-building-columns"></i></span></div>
+                        <p id="dash-saldo-banco" class="text-2xl font-extrabold text-slate-900 mt-3">0,00 €</p><p class="text-xs text-slate-500">Saldo bancario actual</p>
+                        <div class="mt-4 space-y-2 text-sm"><div class="flex justify-between"><span class="text-slate-500">Cobros pendientes</span><strong id="dash-cobros-pendientes" class="text-emerald-700">0,00 €</strong></div><div class="flex justify-between"><span class="text-slate-500">Pagos pendientes</span><strong id="dash-pagos-pendientes" class="text-rose-700">0,00 €</strong></div><div class="flex justify-between border-t pt-2"><span class="font-semibold text-slate-700">Posición neta</span><strong id="dash-posicion-neta" class="text-blue-700">0,00 €</strong></div></div>
+                        <button onclick="switchTab('tesoreria')" class="mt-4 w-full rounded-xl border border-blue-100 text-blue-700 hover:bg-blue-50 px-3 py-2 text-xs font-bold">Detalle de tesorería <i class="fa-solid fa-arrow-right ml-1"></i></button>
+                    </article>
+                </div>
+            </section>
+
+            <!-- VISTA: FACTURAS EMITIDAS -->
+            <section id="tab-ingresos" class="tab-content hidden space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-file-invoice-dollar text-emerald-600 mr-2"></i>Facturas Emitidas</h2>
+                        <p class="text-xs text-slate-500">Libro registro de ventas e ingresos</p>
+                    </div>
+                    <button onclick="openIngresoModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm">
+                        <i class="fa-solid fa-plus mr-1"></i> Nueva Factura
+                    </button>
+                </div>
+                <div id="cards-ingresos-mobile" class="grid grid-cols-1 gap-3 md:hidden"></div>
+                <div class="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                    <table class="w-full text-sm text-left text-slate-600">
+                        <thead class="text-xs text-slate-700 uppercase bg-slate-100 border-b">
+                            <tr>
+                                <th class="px-3 py-3">Nº factura</th>
+                                <th class="px-3 py-3">Fecha</th>
+                                <th class="px-3 py-3">Cliente</th>
+                                <th class="px-3 py-3 text-center">Trim.</th>
+                                <th class="px-3 py-3 text-right">Base Imp.</th>
+                                <th class="px-3 py-3 text-right">IVA</th>
+                                <th class="px-3 py-3 text-right">Ret. IRPF</th>
+                                <th class="px-3 py-3 text-right">Total</th>
+                                <th class="px-3 py-3 text-center">Estado</th>
+                                <th class="px-3 py-3 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-ingresos-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA: FACTURAS RECIBIDAS -->
+            <section id="tab-facturas-recibidas" class="tab-content hidden space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl shadow-sm border-l-4 border-indigo-600">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-file-invoice text-indigo-600 mr-2"></i>Libro de Facturas Recibidas</h2>
+                        <p class="text-xs text-slate-500">Facturas completas de proveedores con NIF/CIF para deducción de IVA (Mod. 303) e IRPF</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="iniciarEscaneoDocumento('factura')" class="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm">
+                            <i class="fa-solid fa-camera mr-1.5 text-amber-400"></i> Escanear Factura
+                        </button>
+                        <button onclick="openCompraModal('factura')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm">
+                            <i class="fa-solid fa-plus mr-1"></i> Manual
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">Total Facturas</p><p id="fr-panel-total" class="text-base sm:text-xl font-extrabold text-slate-900 mt-1">0,00 €</p></article>
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">IVA Deducible</p><p id="fr-panel-iva" class="text-base sm:text-xl font-extrabold text-indigo-700 mt-1">0,00 €</p></article>
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">Pendiente Pago</p><p id="fr-panel-pendiente" class="text-base sm:text-xl font-extrabold text-rose-700 mt-1">0,00 €</p></article>
+                </div>
+
+                <div id="cards-facturas-recibidas-mobile" class="grid grid-cols-1 gap-3 md:hidden"></div>
+                <div class="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                    <table class="w-full text-xs text-left text-slate-600">
+                        <thead class="uppercase bg-slate-100 border-b text-slate-700">
+                            <tr>
+                                <th class="px-3 py-3">Nº Fra. Prov.</th>
+                                <th class="px-3 py-3">Fecha</th>
+                                <th class="px-3 py-3">Trim</th>
+                                <th class="px-3 py-3">Proveedor / NIF</th>
+                                <th class="px-3 py-3">Categoría</th>
+                                <th class="px-3 py-3 text-right">Base Imp.</th>
+                                <th class="px-3 py-3 text-right">IVA Soportado</th>
+                                <th class="px-3 py-3 text-right">Total</th>
+                                <th class="px-3 py-3 text-center">Adjunto</th>
+                                <th class="px-3 py-3 text-center">Estado</th>
+                                <th class="px-3 py-3 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-facturas-recibidas-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA: GASTOS Y TICKETS -->
+            <section id="tab-gastos-simples" class="tab-content hidden space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl shadow-sm border-l-4 border-rose-600">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-receipt text-rose-600 mr-2"></i>Gastos Deducibles y Tickets</h2>
+                        <p class="text-xs text-slate-500">Cuota autónomos RETA, seguros, comisiones bancarias, impuestos locales o tickets sin IVA deducible</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="iniciarEscaneoDocumento('gasto')" class="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm">
+                            <i class="fa-solid fa-camera mr-1.5 text-amber-400"></i> Escanear Ticket
+                        </button>
+                        <button onclick="openCompraModal('gasto')" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm">
+                            <i class="fa-solid fa-plus mr-1"></i> Manual
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">Total Gastos</p><p id="gs-panel-total" class="text-base sm:text-xl font-extrabold text-slate-900 mt-1">0,00 €</p></article>
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">Base Deducible IRPF</p><p id="gs-panel-irpf" class="text-base sm:text-xl font-extrabold text-rose-700 mt-1">0,00 €</p></article>
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">Nº Registros</p><p id="gs-panel-numero" class="text-base sm:text-xl font-extrabold text-slate-700 mt-1">0</p></article>
+                </div>
+
+                <div id="cards-gastos-simples-mobile" class="grid grid-cols-1 gap-3 md:hidden"></div>
+                <div class="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                    <table class="w-full text-xs text-left text-slate-600">
+                        <thead class="uppercase bg-slate-100 border-b text-slate-700">
+                            <tr>
+                                <th class="px-3 py-3">Fecha</th>
+                                <th class="px-3 py-3">Trim</th>
+                                <th class="px-3 py-3">Concepto / Entidad</th>
+                                <th class="px-3 py-3">Categoría</th>
+                                <th class="px-3 py-3 text-right">Importe Deducible IRPF</th>
+                                <th class="px-3 py-3 text-center">Justificante</th>
+                                <th class="px-3 py-3 text-center">Estado</th>
+                                <th class="px-3 py-3 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-gastos-simples-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA: ANÁLISIS ECONÓMICO -->
+            <section id="tab-analisis-economico" class="tab-content hidden space-y-5">
+                <div class="app-card p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-slate-800"><i class="fa-solid fa-chart-line text-blue-600 mr-2"></i>Análisis Económico</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Comparativa de ingresos, estructura de gastos y margen neto</p>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm">
+                        <label class="text-xs font-bold text-slate-500">Ejercicio:</label>
+                        <select id="eco-anio-a" onchange="renderAnalisisEconomico()" class="border rounded-xl p-2 font-bold bg-slate-50"></select>
+                        <span class="text-slate-400">vs</span>
+                        <select id="eco-anio-b" onchange="renderAnalisisEconomico()" class="border rounded-xl p-2 font-bold bg-slate-50"></select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                    <article class="app-card p-4"><p id="eco-label-ing-a" class="text-xs uppercase font-bold text-slate-500">Ingresos</p><p id="eco-ing-a" class="text-xl sm:text-2xl font-extrabold text-emerald-700 mt-1">0,00 €</p><p id="eco-ing-b" class="text-xs text-slate-500 mt-1">Ant: 0,00 €</p></article>
+                    <article class="app-card p-4"><p class="text-xs uppercase font-bold text-slate-500">Gastos Deducibles</p><p id="eco-gas-a" class="text-xl sm:text-2xl font-extrabold text-rose-700 mt-1">0,00 €</p><p id="eco-gas-b" class="text-xs text-slate-500 mt-1">Ant: 0,00 €</p></article>
+                    <article class="app-card p-4"><p class="text-xs uppercase font-bold text-slate-500">Beneficio Neto</p><p id="eco-res-a" class="text-xl sm:text-2xl font-extrabold text-blue-700 mt-1">0,00 €</p><p id="eco-res-b" class="text-xs text-slate-500 mt-1">Ant: 0,00 €</p></article>
+                    <article class="app-card p-4"><p class="text-xs uppercase font-bold text-slate-500">Margen Operativo</p><p id="eco-margen-a" class="text-xl sm:text-2xl font-extrabold text-slate-800 mt-1">N/D</p><p id="eco-margen-b" class="text-xs text-slate-500 mt-1">Ant: N/D</p></article>
+                </div>
+
+                <div class="app-card p-4 sm:p-5 space-y-2">
+                    <h3 class="font-bold text-slate-800">Evolución mensual: Ingresos vs Gastos vs Beneficio</h3>
+                    <div class="chart-wrap"><canvas id="chartAnalisisEconomico"></canvas></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="app-card p-4 sm:p-5 space-y-2">
+                        <h3 class="font-bold text-slate-800">Distribución de Compras y Gastos por Categoría</h3>
+                        <div class="chart-wrap"><canvas id="chartEcoCategorias"></canvas></div>
+                    </div>
+                    <div class="app-card p-4 sm:p-5 space-y-2">
+                        <h3 class="font-bold text-slate-800">Top Clientes por Facturación</h3>
+                        <div class="chart-wrap"><canvas id="chartRentabilidadClientes"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="app-card p-4 sm:p-5">
+                    <h3 class="font-bold text-slate-800 mb-3">Desglose Mensual Detallado</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs min-w-[550px]">
+                            <thead class="bg-slate-100 text-slate-700">
+                                <tr><th class="p-2.5 text-left">Mes</th><th class="p-2.5 text-right">Ingresos</th><th class="p-2.5 text-right">Facturas Recib.</th><th class="p-2.5 text-right">Gastos/Tickets</th><th class="p-2.5 text-right">Resultado Neto</th></tr>
+                            </thead>
+                            <tbody id="eco-tabla-meses"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VISTA: TESORERÍA -->
+            <section id="tab-tesoreria" class="tab-content hidden space-y-5">
+                <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-emerald-600">
+                    <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
+                        <div><h2 class="text-lg sm:text-xl font-bold text-slate-800"><i class="fa-solid fa-wallet text-emerald-600 mr-2"></i>Posición de Tesorería</h2><p class="text-xs text-slate-500">Liquidez real, cobros y pagos pendientes.</p></div>
+                        <div class="text-right"><p class="text-[11px] font-bold text-slate-400 uppercase">Saldo Líquido Actual</p><p id="tesoreria-saldo-banco" class="text-2xl font-black text-emerald-700">0,00 €</p></div>
+                    </div>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div class="bg-slate-50 p-3.5 rounded-xl border"><p class="text-[11px] font-bold text-slate-500 uppercase">Te Deben</p><p id="tesoreria-cobros" class="text-lg sm:text-xl font-bold text-blue-600 mt-1">0,00 €</p></div>
+                        <div class="bg-slate-50 p-3.5 rounded-xl border"><p class="text-[11px] font-bold text-slate-500 uppercase">Debes</p><p id="tesoreria-pagos" class="text-lg sm:text-xl font-bold text-rose-600 mt-1">0,00 €</p></div>
+                        <div class="bg-slate-50 p-3.5 rounded-xl border"><p class="text-[11px] font-bold text-slate-500 uppercase">Reserva Hacienda</p><p id="tesoreria-impuestos" class="text-lg sm:text-xl font-bold text-amber-600 mt-1">0,00 €</p></div>
+                        <div class="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/50"><p class="text-[11px] font-bold text-emerald-800 uppercase">Posición Neta</p><p id="tesoreria-neta" class="text-lg sm:text-xl font-black text-emerald-900 mt-1">0,00 €</p></div>
+                    </div>
+                </div>
+                <div class="app-card p-4 sm:p-5 space-y-3">
+                    <h3 class="font-bold text-slate-800">Vencimientos pendientes</h3>
+                    <div class="overflow-x-auto"><table class="w-full text-sm text-left text-slate-600"><thead class="bg-slate-100 text-xs uppercase text-slate-700 border-b"><tr><th class="p-3">Tipo</th><th class="p-3">Fecha</th><th class="p-3">Tercero</th><th class="p-3 text-right">Pendiente</th></tr></thead><tbody id="tabla-vencimientos-body"></tbody></table></div>
+                </div>
+            </section>
+
+            <!-- VISTA: DIRECTORIO DE CLIENTES -->
+            <section id="tab-clientes" class="tab-content hidden space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div><h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-address-book text-blue-600 mr-2"></i>Directorio de clientes</h2></div>
+                    <button onclick="openClienteModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold"><i class="fa-solid fa-plus mr-1"></i> Nuevo cliente</button>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><p id="clientes-contador" class="text-xs font-bold text-slate-500">0 clientes</p><input id="clientes-busqueda" type="search" oninput="renderClientes()" placeholder="Buscar por nombre o NIF…" class="border rounded-xl px-3 py-2 text-sm w-full sm:w-80"></div>
+                    <div class="overflow-x-auto"><table class="w-full text-sm text-left text-slate-600"><thead class="text-xs uppercase bg-slate-100 text-slate-700"><tr><th class="p-3">Cliente</th><th class="p-3">NIF</th><th class="p-3">Contacto</th><th class="p-3 text-center">Facturas</th><th class="p-3 text-center">Acciones</th></tr></thead><tbody id="tabla-clientes-body"></tbody></table></div>
+                </div>
+            </section>
+
+            <!-- VISTA: PRESUPUESTOS -->
+            <section id="tab-presupuestos" class="tab-content hidden space-y-4">
+                <div class="app-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div><h2 class="text-xl font-extrabold text-slate-800"><i class="fa-solid fa-file-signature text-blue-600 mr-2"></i>Presupuestos</h2></div>
+                    <button type="button" onclick="abrirModalPresupuesto()" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-sm"><i class="fa-solid fa-plus mr-2"></i>Nuevo presupuesto</button>
+                </div>
+                <div id="presupuestos-lista" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
+                <p id="presupuestos-vacio" class="hidden text-center text-sm text-slate-500 py-8">Todavía no hay presupuestos.</p>
+            </section>
+
+            <!-- VISTA: RESUMEN TRIMESTRAL -->
+            <section id="tab-resumen-trimestral" class="tab-content hidden space-y-5">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-table-cells text-blue-600 mr-2"></i>Cierre Fiscal por Trimestres (Normativa AEAT)</h2>
+                        <p class="text-xs text-slate-500">El Modelo 303 es estanco por trimestre; el Modelo 130 es acumulativo desde el 1 de enero descontando pagos anteriores y retenciones soportadas en facturas.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" id="cards-trimestres"></div>
+                </div>
+            </section>
+
+            <!-- VISTA: IMPRESOS OFICIALES AEAT -->
+            <section id="tab-aeat" class="tab-content hidden space-y-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3 no-print">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="aeat-model-select" onchange="updateAEATView()" class="border rounded-xl px-3 py-2 text-sm font-bold bg-slate-50">
+                            <option value="303">Modelo 303 - IVA Trimestral</option>
+                            <option value="130">Modelo 130 - IRPF Acumulativo</option>
+                            <option value="390">Modelo 390 - Resumen Anual IVA</option>
+                        </select>
+                        <select id="aeat-period-select" onchange="updateAEATView()" class="border rounded-xl px-3 py-2 text-sm font-bold bg-slate-50">
+                            <option value="1T">1T (Ene-Mar)</option>
+                            <option value="2T">2T (Abr-Jun)</option>
+                            <option value="3T">3T (Jul-Sep)</option>
+                            <option value="4T">4T (Oct-Dic)</option>
+                        </select>
+                    </div>
+                    <button onclick="descargarImpresoPDF()" class="bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-pdf"></i> Descargar Borrador PDF
+                    </button>
+                </div>
+                <div id="aeat-print-container" class="bg-white p-6 rounded-xl shadow-sm max-w-4xl mx-auto border text-xs leading-tight"></div>
+            </section>
+
+            <!-- VISTA: PERFIL AUTÓNOMO Y COPIAS -->
+            <section id="tab-perfil" class="tab-content hidden max-w-3xl mx-auto space-y-6">
+                <div class="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                        <h2 class="text-lg sm:text-xl font-extrabold text-slate-800"><i class="fa-solid fa-id-card text-blue-600 mr-2"></i>Datos Fiscales y Actividad</h2>
+                        <button type="button" onclick="abrirOnboarding(true)" class="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Buscar Epígrafe IAE</button>
+                    </div>
+                    <form id="form-perfil" onsubmit="savePerfil(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nombre / Razón Social</label><input type="text" id="prof-nombre" class="w-full border rounded-xl p-2.5 text-sm" required></div>
+                            <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">NIF / NIE</label><input type="text" id="prof-nif" class="w-full border rounded-xl p-2.5 text-sm" required></div>
+                            <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">Epígrafe IAE</label><input type="text" id="prof-iae" class="w-full border rounded-xl p-2.5 text-sm bg-slate-50"></div>
+                            <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">Ciudad / Municipio</label><input type="text" id="prof-ciudad" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. Terrassa"></div>
+                            <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">Retención IRPF por defecto</label><select id="prof-retencion-defecto" class="w-full border rounded-xl p-2.5 text-sm"><option value="0">0% (Empresarial / sin retención)</option><option value="7">7% (Nuevo autónomo profesional)</option><option value="15">15% (Profesional general)</option></select></div>
+                            <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">Teléfono</label><input type="text" id="prof-telefono" class="w-full border rounded-xl p-2.5 text-sm"></div>
+                        </div>
+                        <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">Dirección Fiscal</label><input type="text" id="prof-direccion" class="w-full border rounded-xl p-2.5 text-sm"></div>
+                        <div class="border-t pt-4">
+                            <h3 class="text-sm font-bold text-slate-700 mb-2"><i class="fa-solid fa-building-columns text-emerald-600 mr-1"></i>Cuenta Bancaria</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2"><label class="block text-xs font-bold text-slate-600 uppercase mb-1">IBAN</label><input type="text" id="prof-iban" class="w-full border rounded-xl p-2.5 text-sm font-mono"></div>
+                                <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">Saldo Actual (€)</label><input type="number" step="0.01" id="prof-saldo" class="w-full border rounded-xl p-2.5 text-sm font-bold"></div>
+                            </div>
+                        </div>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold w-full shadow-sm">Guardar Configuración</button>
+                    </form>
+                </div>
+
+                <!-- COPIAS DE SEGURIDAD -->
+                <div class="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-shield-halved text-emerald-600 mr-2"></i>Copias de Seguridad y Almacenamiento</h3>
+                            <p class="text-xs text-slate-500">Los archivos adjuntos (PDF/JPG) se almacenan en IndexedDB sin límite de 5 MB.</p>
+                        </div>
+                        <span id="idb-usage-badge" class="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full">0 adjuntos</span>
+                    </div>
+                    <div class="grid sm:grid-cols-2 gap-3">
+                        <button type="button" onclick="exportJSON()" class="bg-slate-800 hover:bg-slate-900 text-white rounded-xl px-4 py-3 text-sm font-bold"><i class="fa-solid fa-download mr-2"></i>Exportar copia (.json)</button>
+                        <div class="flex gap-2">
+                            <input type="file" id="backup-file" accept=".json,application/json" class="w-full text-xs border rounded-xl p-2 bg-slate-50">
+                            <button type="button" onclick="importJSON()" class="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-4 py-2 text-xs font-bold shrink-0">Restaurar</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- INPUT OCULTO PARA ESCANEO OCR (CÁMARA TRASERA EN MÓVIL O PDF) -->
+    <input type="file" id="ocr-file-input" accept="image/*,application/pdf" capture="environment" class="hidden" onchange="manejarArchivoOCR(event)">
+
+    <!-- BARRA INFERIOR MÓVIL -->
+    <nav class="mobile-bottom-nav no-print" aria-label="Navegación móvil">
+        <button type="button" class="m-nav-btn active" data-mnav="dashboard" onclick="switchTab('dashboard')">
+            <i class="fa-solid fa-house"></i>
+            <span>Inicio</span>
+        </button>
+        <button type="button" class="m-nav-btn" data-mnav="ventas" onclick="switchTab('ingresos')">
+            <i class="fa-solid fa-file-invoice-dollar"></i>
+            <span>Ventas</span>
+        </button>
+        <button type="button" class="m-nav-btn" onclick="toggleQuickActions()" aria-label="Acción rápida">
+            <span class="m-nav-fab"><i class="fa-solid fa-plus"></i></span>
+            <span class="text-blue-700 font-bold">Crear</span>
+        </button>
+        <button type="button" class="m-nav-btn" data-mnav="compras" onclick="switchTab('facturas-recibidas')">
+            <i class="fa-solid fa-receipt"></i>
+            <span>Compras</span>
+        </button>
+        <button type="button" class="m-nav-btn" data-mnav="gestion" onclick="switchTab('tesoreria')">
+            <i class="fa-solid fa-chart-pie"></i>
+            <span>Gestión</span>
+        </button>
+    </nav>
+
+    <!-- MENÚ FLOTANTE ACCIÓN RÁPIDA MÓVIL -->
+    <div id="mobile-quick-actions" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-end justify-center p-4" onclick="if(event.target===this) toggleQuickActions()">
+        <div class="bg-white w-full max-w-md rounded-2xl p-5 space-y-2.5 shadow-2xl mb-16">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-extrabold text-slate-800">Registrar movimiento rápido</h3>
+                <button type="button" onclick="toggleQuickActions()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-600">&times;</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="toggleQuickActions(); iniciarEscaneoDocumento('factura');" class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-900 text-white text-center shadow-sm">
+                    <i class="fa-solid fa-camera text-xl text-amber-400 mb-1"></i>
+                    <span class="font-bold text-xs">Escanear Factura</span>
+                </button>
+                <button type="button" onclick="toggleQuickActions(); iniciarEscaneoDocumento('gasto');" class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800 text-white text-center shadow-sm">
+                    <i class="fa-solid fa-receipt text-xl text-rose-400 mb-1"></i>
+                    <span class="font-bold text-xs">Escanear Ticket</span>
+                </button>
+            </div>
+            <button type="button" onclick="toggleQuickActions(); openCompraModal('factura');" class="w-full flex items-center gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-left">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white grid place-items-center text-lg shrink-0"><i class="fa-solid fa-file-invoice"></i></div>
+                <div><p class="font-bold text-slate-900 text-sm">Factura Recibida (con IVA)</p><p class="text-[11px] text-slate-500">Proveedor con NIF y cuota de IVA deducible</p></div>
+            </button>
+            <button type="button" onclick="toggleQuickActions(); openCompraModal('gasto');" class="w-full flex items-center gap-3 p-3 rounded-xl bg-rose-50 border border-rose-100 text-left">
+                <div class="w-10 h-10 rounded-xl bg-rose-600 text-white grid place-items-center text-lg shrink-0"><i class="fa-solid fa-receipt"></i></div>
+                <div><p class="font-bold text-slate-900 text-sm">Gasto / Ticket (sin IVA deducible)</p><p class="text-[11px] text-slate-500">Cuota RETA, seguros, comisiones o tickets</p></div>
+            </button>
+            <button type="button" onclick="toggleQuickActions(); openIngresoModal();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-left">
+                <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white grid place-items-center text-lg shrink-0"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                <div><p class="font-bold text-slate-900 text-sm">Nueva Factura Emitida</p><p class="text-[11px] text-slate-500">Facturar venta o servicio a cliente</p></div>
+            </button>
+            <button type="button" onclick="toggleQuickActions(); abrirModalPresupuesto();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100 text-left">
+                <div class="w-10 h-10 rounded-xl bg-blue-600 text-white grid place-items-center text-lg shrink-0"><i class="fa-solid fa-file-signature"></i></div>
+                <div><p class="font-bold text-slate-900 text-sm">Nuevo Presupuesto</p><p class="text-[11px] text-slate-500">Crear propuesta comercial</p></div>
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL ONBOARDING -->
+    <div id="modal-onboarding" class="hidden fixed inset-0 z-[110] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden my-auto">
+            <div class="bg-gradient-to-r from-blue-900 to-blue-700 p-5 text-white">
+                <span class="inline-block text-[10px] font-bold uppercase tracking-widest bg-white/20 px-2.5 py-0.5 rounded-full mb-1.5">Configuración Inicial · AEAT</span>
+                <h2 class="text-xl sm:text-2xl font-extrabold">Selecciona tu actividad y epígrafe IAE</h2>
+                <p class="text-xs text-blue-100 mt-1">Filtra por sector o palabra clave para configurar automáticamente tu régimen de IVA, IRPF y modelos trimestrales.</p>
+            </div>
+            <form onsubmit="guardarOnboarding(event)" class="p-4 sm:p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Tu nombre o razón social *</label>
+                        <input type="text" id="onb-nombre" required class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. Rafa Jiménez">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Ciudad / Municipio *</label>
+                        <input type="text" id="onb-ciudad" required class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. Terrassa">
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                        <label class="text-xs font-bold text-slate-700">Busca tu Epígrafe IAE (<span id="onb-count-iae">0</span> disponibles)</label>
+                        <select id="onb-filtro-sector" onchange="filtrarEpigrafesIAE()" class="border rounded-lg px-2 py-1 text-xs font-semibold bg-slate-50">
+                            <option value="">Todos los sectores</option>
+                            <option value="Tecnología y Marketing">Tecnología y Marketing</option>
+                            <option value="Construcción y Reformas">Construcción y Reformas</option>
+                            <option value="Comercio y Hostelería">Comercio y Hostelería</option>
+                            <option value="Transporte y Logística">Transporte y Logística</option>
+                            <option value="Profesionales y Consultoría">Profesionales y Consultoría</option>
+                            <option value="Salud, Formación y Estética">Salud, Formación y Estética</option>
+                            <option value="Industria y Mantenimiento">Industria y Mantenimiento</option>
+                        </select>
+                    </div>
+                    <input type="search" id="onb-buscador-iae" oninput="filtrarEpigrafesIAE()" placeholder="Buscar por código (763, 504...) o palabra (electricista, tienda, bar, diseño...)" class="w-full border-2 border-blue-200 focus:border-blue-600 rounded-xl p-2.5 text-sm mb-2 outline-none">
+                    <div id="onb-lista-iae" class="max-h-52 overflow-y-auto border rounded-xl divide-y bg-slate-50"></div>
+                </div>
+
+                <div id="onb-resumen-fiscal" class="hidden rounded-xl bg-emerald-50 border border-emerald-200 p-3.5 space-y-1.5">
+                    <p class="text-xs font-extrabold text-emerald-900 uppercase"><i class="fa-solid fa-circle-check mr-1"></i>Tributación detectada:</p>
+                    <p id="onb-texto-tributacion" class="text-xs text-emerald-800 leading-relaxed"></p>
+                    <div class="pt-1 flex items-center gap-2">
+                        <input type="checkbox" id="onb-nuevo-autonomo" onchange="actualizarTextoTributacion()" class="rounded text-blue-600">
+                        <label for="onb-nuevo-autonomo" class="text-xs font-semibold text-slate-700">Soy nuevo autónomo (retención reducida del 7% durante los 3 primeros años si es actividad profesional)</label>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2 border-t">
+                    <button type="button" id="onb-btn-cerrar" onclick="cerrarOnboarding()" class="hidden px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold">Cancelar</button>
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-md">Aplicar y continuar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL COMPRA / GASTO -->
+    <div id="modal-compra" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center z-50 p-0 sm:p-4">
+        <div class="bg-white sm:rounded-2xl shadow-xl p-5 sm:p-6 w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <div>
+                    <h3 id="comp-modal-titulo" class="text-lg font-extrabold text-slate-800">Registrar Factura Recibida</h3>
+                    <p id="comp-modal-subtitulo" class="text-xs text-slate-500">Deduce IVA en Modelo 303 y gasto en IRPF Modelo 130</p>
+                </div>
+                <button type="button" onclick="closeCompraModal()" class="w-9 h-9 rounded-full bg-slate-100 text-slate-600 text-xl">&times;</button>
+            </div>
+            <form onsubmit="saveCompra(event)" class="space-y-3">
+                <!-- BARRA DE PROGRESO OCR LOCAL -->
+                <div id="comp-ocr-status" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                    <div class="flex items-center justify-between text-xs">
+                        <span id="comp-ocr-msg" class="font-semibold text-amber-900">Procesando documento...</span>
+                    </div>
+                    <div class="w-full h-2 bg-amber-200 rounded-full overflow-hidden">
+                        <div id="comp-ocr-bar" class="h-full bg-amber-600 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <input type="hidden" id="comp-tipo" value="factura">
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="block text-xs font-bold text-slate-600">Fecha *</label><input type="date" id="comp-fecha" class="w-full border rounded-xl p-2.5 text-sm" required onchange="autoTrimestre('comp-fecha', 'comp-trimestre')"></div>
+                    <div><label class="block text-xs font-bold text-slate-600">Trimestre</label><select id="comp-trimestre" class="w-full border rounded-xl p-2.5 text-sm"><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
+                </div>
+
+                <div id="comp-bloque-factura" class="grid grid-cols-2 gap-2">
+                    <div><label class="block text-xs font-bold text-slate-600">Nº Factura Proveedor *</label><input type="text" id="comp-num-factura" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. A-2026-884"></div>
+                    <div><label class="block text-xs font-bold text-slate-600">NIF / CIF Proveedor *</label><input type="text" id="comp-nif-proveedor" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. B12345678"></div>
+                </div>
+
+                <div><label class="block text-xs font-bold text-slate-600" id="comp-label-proveedor">Proveedor / Acreedor *</label><input type="text" id="comp-proveedor" class="w-full border rounded-xl p-2.5 text-sm" required placeholder="Nombre de la empresa o concepto"></div>
+                <div><label class="block text-xs font-bold text-slate-600">Categoría contable</label><select id="comp-categoria" class="w-full border rounded-xl p-2.5 text-sm"></select></div>
+
+                <div id="comp-importes-factura" class="grid grid-cols-2 gap-2">
+                    <div><label class="block text-xs font-bold text-slate-600">Base Imponible (€) *</label><input type="number" step="0.01" id="comp-base" class="w-full border rounded-xl p-2.5 text-sm" oninput="actualizarResumenCompra()"></div>
+                    <div><label class="block text-xs font-bold text-slate-600">Tipo de IVA</label><select id="comp-iva-pct" class="w-full border rounded-xl p-2.5 text-sm" onchange="actualizarResumenCompra()"><option value="21" selected>21% General</option><option value="10">10% Reducido</option><option value="4">4% Superreducido</option><option value="0">0% Exento</option></select></div>
+                </div>
+
+                <div id="comp-importes-gasto" class="hidden">
+                    <label class="block text-xs font-bold text-slate-600">Importe Total Deducible IRPF (€) *</label>
+                    <input type="number" step="0.01" id="comp-total-simple" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. 310.00 (Cuota autónomos, seguro, ticket...)" oninput="actualizarResumenCompra()">
+                </div>
+
+                <div><label class="block text-xs font-bold text-slate-600">Estado de pago</label><select id="comp-estado" class="w-full border rounded-xl p-2.5 text-sm"><option value="pagado">Pagado</option><option value="pendiente">Pendiente de pago</option></select></div>
+
+                <div class="border rounded-xl p-3 bg-slate-50 space-y-1.5">
+                    <label class="block text-xs font-bold text-slate-700"><i class="fa-solid fa-paperclip mr-1 text-blue-600"></i>Adjuntar documento (PDF / Foto)</label>
+                    <input type="file" id="comp-archivo" accept="application/pdf,image/*" class="w-full text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-white file:font-bold">
+                    <p class="text-[10px] text-slate-500">Se guarda en IndexedDB (soporta archivos pesados sin llenar localStorage).</p>
+                </div>
+
+                <p id="comp-resumen-texto" class="text-xs font-bold text-slate-700 bg-blue-50 border border-blue-100 p-2.5 rounded-xl"></p>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" onclick="closeCompraModal()" class="px-4 py-2.5 bg-slate-100 rounded-xl text-sm font-bold">Cancelar</button>
+                    <button type="submit" id="comp-btn-guardar" class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL INGRESO -->
+    <div id="modal-ingreso" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center z-50 p-0 sm:p-4">
+        <div class="bg-white sm:rounded-2xl shadow-xl p-5 sm:p-6 w-full max-w-3xl h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="text-lg font-extrabold text-slate-800">Nueva Factura Emitida</h3>
+                <button type="button" onclick="closeIngresoModal()" class="w-9 h-9 rounded-full bg-slate-100 text-slate-600 text-xl">&times;</button>
+            </div>
+            <form onsubmit="saveIngreso(event)" class="space-y-3">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div><label class="block text-xs font-bold text-slate-600">Fecha</label><input type="date" id="ing-fecha" class="w-full border rounded-xl p-2 text-sm" required onchange="autoTrimestre('ing-fecha', 'ing-trimestre')"></div>
+                    <div><label class="block text-xs font-bold text-slate-600">Nº Factura</label><input type="text" id="ing-numero" class="w-full border rounded-xl p-2 text-sm bg-slate-100 font-bold" readonly></div>
+                    <div class="col-span-2 sm:col-span-1"><label class="block text-xs font-bold text-slate-600">Trimestre</label><select id="ing-trimestre" class="w-full border rounded-xl p-2 text-sm"><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
+                </div>
+                <div class="flex items-end gap-2">
+                    <div class="flex-1"><label class="block text-xs font-bold text-slate-600">Cliente *</label><select id="ing-cliente" class="w-full border rounded-xl p-2.5 text-sm" required></select></div>
+                    <button type="button" onclick="nuevoClienteDesdeFactura()" class="px-3 py-2.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold"><i class="fa-solid fa-user-plus"></i></button>
+                </div>
+                <div class="border rounded-xl p-3.5 space-y-3 bg-slate-50/50">
+                    <div class="flex justify-between items-center"><h4 class="font-bold text-sm text-slate-800">Conceptos</h4><button type="button" onclick="anadirLineaFactura()" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">+ Línea</button></div>
+                    <div id="ing-lineas" class="space-y-2.5"></div>
+                    <div class="grid grid-cols-2 gap-2 border-t pt-3">
+                        <div><label class="block text-xs font-bold text-slate-600">Retención IRPF</label><select id="ing-irpf" onchange="actualizarTotalesFactura()" class="w-full border rounded-xl p-2 text-sm bg-white"><option value="0">Sin retención (0%)</option><option value="7">7 %</option><option value="15">15 %</option><option value="19">19 %</option></select></div>
+                        <div><label class="block text-xs font-bold text-slate-600">Estado cobro</label><select id="ing-estado" class="w-full border rounded-xl p-2 text-sm bg-white"><option value="pendiente">Pendiente</option><option value="cobrado">Cobrado</option></select></div>
+                    </div>
+                    <div id="ing-resumen-totales" class="bg-white border rounded-xl p-3 text-sm"></div>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" onclick="closeIngresoModal()" class="px-4 py-2.5 bg-slate-100 rounded-xl text-sm font-bold">Cancelar</button>
+                    <button type="submit" class="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold">Guardar factura</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL CLIENTE -->
+    <div id="modal-cliente" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-[60] p-4">
+        <div class="bg-white rounded-2xl shadow-xl p-5 w-full max-w-md">
+            <div class="flex justify-between items-center border-b pb-3 mb-4"><h3 class="text-lg font-bold">Nuevo cliente</h3><button type="button" onclick="closeClienteModal()" class="text-slate-400 text-xl">&times;</button></div>
+            <form id="form-cliente" onsubmit="saveCliente(event)" class="space-y-3">
+                <div><label class="block text-xs font-bold text-slate-600 mb-1">Nombre / Razón social *</label><input id="cli-nombre" required class="w-full border rounded-xl p-2.5 text-sm"></div>
+                <div><label class="block text-xs font-bold text-slate-600 mb-1">NIF / CIF *</label><input id="cli-nif" required class="w-full border rounded-xl p-2.5 text-sm"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Email</label><input id="cli-email" type="email" class="w-full border rounded-xl p-2.5 text-sm"></div>
+                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Teléfono</label><input id="cli-telefono" class="w-full border rounded-xl p-2.5 text-sm"></div>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t"><button type="button" onclick="closeClienteModal()" class="px-4 py-2 bg-slate-100 rounded-xl text-sm font-bold">Cancelar</button><button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold">Guardar</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL PRESUPUESTO -->
+    <div id="modal-presupuesto" class="hidden fixed inset-0 z-[100] bg-slate-950/60 p-0 sm:p-4 overflow-y-auto">
+        <div class="min-h-full sm:min-h-0 sm:max-w-xl sm:mx-auto sm:my-6 bg-white sm:rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-white border-b px-4 py-3.5 flex items-center justify-between">
+                <h3 class="font-extrabold text-lg text-slate-800">Nuevo presupuesto</h3>
+                <button type="button" onclick="cerrarModalPresupuesto()" class="w-9 h-9 rounded-full bg-slate-100 text-slate-600 text-xl">&times;</button>
+            </div>
+            <form onsubmit="guardarPresupuesto(event)" class="p-4 sm:p-5 space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block text-xs font-bold text-slate-700 mb-1">Cliente *</label><select id="pres-cliente" required class="w-full border rounded-xl p-2.5 text-sm bg-white"></select></div>
+                    <div><label class="block text-xs font-bold text-slate-700 mb-1">Número</label><input id="pres-numero" readonly class="w-full border rounded-xl p-2.5 text-sm bg-slate-50 font-bold"></div>
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-2"><h4 class="font-bold text-sm text-slate-800">Conceptos</h4><button type="button" onclick="anadirLineaPresupuesto()" class="text-xs font-bold text-blue-700 px-3 py-1 rounded-lg bg-blue-50">+ Línea</button></div>
+                    <div id="pres-lineas" class="space-y-2"></div>
+                </div>
+                <div class="rounded-2xl bg-slate-900 text-white p-4 flex justify-between items-center">
+                    <span class="font-bold text-sm">TOTAL PRESUPUESTO</span>
+                    <strong id="pres-total-final" class="text-xl text-emerald-400">0,00 €</strong>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="cerrarModalPresupuesto()" class="border rounded-xl px-4 py-2.5 text-sm font-bold">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white rounded-xl px-5 py-2.5 text-sm font-bold">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
