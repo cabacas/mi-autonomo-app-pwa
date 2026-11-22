@@ -63,6 +63,7 @@
                 <button class="side-link" data-tab="gastos-simples" onclick="switchTab('gastos-simples')"><i class="fa-solid fa-receipt w-5"></i> Gastos y tickets</button>
                 <div class="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-blue-300">Fiscal y Análisis</div>
                 <button class="side-link" data-tab="analisis-economico" onclick="switchTab('analisis-economico')"><i class="fa-solid fa-chart-column w-5"></i> Análisis económico</button>
+                <button class="side-link" data-tab="posicionamiento" onclick="switchTab('posicionamiento')"><i class="fa-solid fa-ranking-star w-5"></i> Radar y Posicionamiento</button>
                 <button class="side-link" data-tab="resumen-trimestral" onclick="switchTab('resumen-trimestral')"><i class="fa-solid fa-chart-pie w-5"></i> Cierres trimestrales</button>
                 <button class="side-link" data-tab="aeat" onclick="switchTab('aeat')"><i class="fa-solid fa-landmark w-5"></i> Modelos AEAT (303/130)</button>
                 <button class="side-link" data-tab="perfil" onclick="switchTab('perfil')"><i class="fa-solid fa-user-gear w-5"></i> Mi perfil y copias</button>
@@ -86,6 +87,7 @@
             <div id="mobile-subnav-gestion" class="mobile-subnav no-print !hidden">
                 <button type="button" class="m-pill active" data-subtab="tesoreria" onclick="switchTab('tesoreria')"><i class="fa-solid fa-wallet mr-1"></i>Tesorería</button>
                 <button type="button" class="m-pill" data-subtab="analisis-economico" onclick="switchTab('analisis-economico')"><i class="fa-solid fa-chart-column mr-1"></i>Análisis</button>
+                <button type="button" class="m-pill" data-subtab="posicionamiento" onclick="switchTab('posicionamiento')"><i class="fa-solid fa-ranking-star mr-1"></i>Radar Local</button>
                 <button type="button" class="m-pill" data-subtab="resumen-trimestral" onclick="switchTab('resumen-trimestral')"><i class="fa-solid fa-chart-pie mr-1"></i>Trimestres</button>
                 <button type="button" class="m-pill" data-subtab="aeat" onclick="switchTab('aeat')"><i class="fa-solid fa-landmark mr-1"></i>AEAT</button>
                 <button type="button" class="m-pill" data-subtab="perfil" onclick="switchTab('perfil')"><i class="fa-solid fa-user-gear mr-1"></i>Perfil</button>
@@ -307,6 +309,75 @@
                             </thead>
                             <tbody id="eco-tabla-meses"></tbody>
                         </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VISTA: EVALUADOR DE POSICIONAMIENTO SECTORIAL Y COMPETENCIA LOCAL (FASE 3) -->
+            <section id="tab-posicionamiento" class="tab-content hidden space-y-5">
+                <div class="app-card p-4 sm:p-5 bg-gradient-to-r from-slate-900 to-blue-900 text-white flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase tracking-widest bg-blue-500/30 text-blue-200 px-2.5 py-0.5 rounded-full">Inteligencia de Negocio · Fase 3</span>
+                        <h2 class="text-xl sm:text-2xl font-extrabold mt-1"><i class="fa-solid fa-ranking-star text-amber-400 mr-2"></i>Posicionamiento en tu Ciudad y Sector</h2>
+                        <p id="bench-subtitulo" class="text-xs text-blue-100 mt-0.5">Comparando tus métricas reales con los registros de tu actividad y municipio</p>
+                    </div>
+                    <button type="button" onclick="ejecutarRadarLocal()" id="btn-radar-local" class="bg-amber-400 hover:bg-amber-300 text-slate-950 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold shadow-md transition">
+                        <i class="fa-solid fa-satellite-dish mr-1.5"></i> Consultar Registros en Ciudad
+                    </button>
+                </div>
+
+                <!-- KPIs COMPARATIVOS -->
+                <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                    <article class="app-card p-4">
+                        <p class="text-[11px] font-bold uppercase text-slate-500">Tu Margen Neto</p>
+                        <p id="bench-tu-margen" class="text-xl sm:text-2xl font-extrabold text-emerald-700 mt-1">0,0%</p>
+                        <p id="bench-sector-margen" class="text-xs text-slate-500 mt-1">Media sector: 0%</p>
+                    </article>
+                    <article class="app-card p-4">
+                        <p class="text-[11px] font-bold uppercase text-slate-500">Tu Ratio de Gastos</p>
+                        <p id="bench-tu-gastos" class="text-xl sm:text-2xl font-extrabold text-rose-700 mt-1">0,0%</p>
+                        <p id="bench-sector-gastos" class="text-xs text-slate-500 mt-1">Media sector: 0%</p>
+                    </article>
+                    <article class="app-card p-4">
+                        <p class="text-[11px] font-bold uppercase text-slate-500">Tu Ticket Medio</p>
+                        <p id="bench-tu-ticket" class="text-xl sm:text-2xl font-extrabold text-blue-700 mt-1">0,00 €</p>
+                        <p id="bench-sector-ticket" class="text-xs text-slate-500 mt-1">Media ciudad: 0,00 €</p>
+                    </article>
+                    <article class="app-card p-4">
+                        <p class="text-[11px] font-bold uppercase text-slate-500">Competidores en Radio</p>
+                        <p id="bench-competidores-count" class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">—</p>
+                        <p id="bench-competidores-ciudad" class="text-xs text-slate-500 mt-1">Pulsa "Consultar Registros"</p>
+                    </article>
+                </div>
+
+                <!-- DIAGNÓSTICO AUTOMÁTICO -->
+                <div id="bench-diagnostico-lista" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+
+                <!-- GRÁFICAS DE POSICIONAMIENTO -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="app-card p-4 sm:p-5 space-y-2">
+                        <h3 class="font-bold text-slate-800">Volumen Económico: Tu Negocio vs Media Local</h3>
+                        <p class="text-xs text-slate-500">Facturación media trimestral y ticket medio por factura (€)</p>
+                        <div class="chart-wrap"><canvas id="chartBenchEconomico"></canvas></div>
+                    </div>
+                    <div class="app-card p-4 sm:p-5 space-y-2">
+                        <h3 class="font-bold text-slate-800">Eficiencia y Rentabilidad (%)</h3>
+                        <p class="text-xs text-slate-500">Porcentaje de beneficio neto frente a estructura de gastos</p>
+                        <div class="chart-wrap"><canvas id="chartBenchMargenes"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- RESULTADOS DEL RADAR DE NEGOCIOS EN TU CIUDAD (OPENSTREETMAP / REGISTROS PÚBLICOS) -->
+                <div class="app-card p-4 sm:p-5 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                        <div>
+                            <h3 class="font-extrabold text-slate-800"><i class="fa-solid fa-map-location-dot text-blue-600 mr-2"></i>Negocios de tu Actividad Detectados en <span id="radar-ciudad-nombre">tu ciudad</span></h3>
+                            <p class="text-xs text-slate-500">Consulta en tiempo real sobre registros geográficos públicos (OpenStreetMap / Overpass) en un radio de 3,5 km.</p>
+                        </div>
+                        <span id="radar-status-badge" class="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full">Listo para consultar</span>
+                    </div>
+                    <div id="radar-negocios-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        <p class="text-xs text-slate-400 col-span-full py-4 text-center">Pulsa el botón superior <strong>"Consultar Registros en Ciudad"</strong> para escanear los negocios de tu sector en tu municipio.</p>
                     </div>
                 </div>
             </section>
