@@ -759,10 +759,31 @@ function autoTrimestre(dateId, trimId) {
     if (val) document.getElementById(trimId).value = Math.ceil((new Date(val).getMonth() + 1) / 3);
 }
 
+function calcularSiguienteNumeroFactura(anioStr) {
+    const prefijo = `F-${anioStr}-`;
+    let maxNum = 0;
+    state.ingresos.forEach(item => {
+        if (String(item.numero || '').startsWith(prefijo)) {
+            const num = parseInt(String(item.numero).slice(prefijo.length), 10);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+    });
+    return `${prefijo}${String(maxNum + 1).padStart(4, '0')}`;
+}
+
+function actualizarNumeroFacturaSegunFecha() {
+    const fechaVal = document.getElementById('ing-fecha')?.value;
+    const anio = fechaVal ? fechaVal.slice(0, 4) : String(state.ejercicioActivo || new Date().getFullYear());
+    const numInput = document.getElementById('ing-numero');
+    if (numInput) numInput.value = calcularSiguienteNumeroFactura(anio);
+}
+
 function openIngresoModal() {
     const hoy = new Date().toISOString().slice(0, 10);
-    document.getElementById('ing-fecha').value = hoy;
-    document.getElementById('ing-numero').value = `F-2026-${String(state.ingresos.length + 1).padStart(4, '0')}`;
+    const anioActivoStr = String(state.ejercicioActivo || hoy.slice(0, 4));
+    const fechaDefecto = hoy.startsWith(anioActivoStr) ? hoy : `${anioActivoStr}-01-15`;
+    document.getElementById('ing-fecha').value = fechaDefecto;
+    document.getElementById('ing-numero').value = calcularSiguienteNumeroFactura(anioActivoStr);
     document.getElementById('ing-cliente').innerHTML = '<option value="">Selecciona cliente…</option>' + state.clientes.map(c => `<option value="${c.id}">${c.nombre} (${c.nif})</option>`).join('');
     document.getElementById('ing-irpf').value = String(state.perfil.retencionDefecto ?? 15);
     document.getElementById('ing-lineas').innerHTML = '';
@@ -1160,71 +1181,255 @@ function eliminarCliente(id) {
     saveStorage();
 }
 
-function abrirModalPresupuesto() {
-    document.getElementById('pres-numero').value = `P-2026-${String(state.presupuestos.length + 1).padStart(4, '0')}`;
-    document.getElementById('pres-cliente').innerHTML = '<option value="">Selecciona cliente…</option>' + state.clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+function calcularSiguienteNumeroPresupuesto(anioStr) {
+    const prefijo = `P-${anioStr}-`;
+    let maxNum = 0;
+    (state.presupuestos || []).forEach(item => {
+        if (String(item.numero || '').startsWith(prefijo)) {
+            const num = parseInt(String(item.numero).slice(prefijo.length), 10);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+    });
+    return `${prefijo}${String(maxNum + 1).padStart(4, '0')}`;
+}
+
+function actualizarPrefijoNumeroPresupuesto() {
+    if (document.getElementById('pres-id-edicion')?.value) return;
+    const fechaVal = document.getElementById('pres-fecha')?.value;
+    const anio = fechaVal ? fechaVal.slice(0, 4) : String(state.ejercicioActivo || new Date().getFullYear());
+    document.getElementById('pres-numero').value = calcularSiguienteNumeroPresupuesto(anio);
+}
+
+function abrirModalPresupuesto(id = null) {
+    document.getElementById('pres-id-edicion').value = '';
+    const hoy = new Date().toISOString().slice(0, 10);
+    const anioActivoStr = String(state.ejercicioActivo || hoy.slice(0, 4));
+    const fechaDefecto = hoy.startsWith(anioActivoStr) ? hoy : `${anioActivoStr}-01-15`;
+
+    document.getElementById('pres-cliente').innerHTML = '<option value="">Selecciona cliente…</option>' + state.clientes.map(c => `<option value="${c.id}">${c.nombre} (${c.nif})</option>`).join('');
     document.getElementById('pres-lineas').innerHTML = '';
-    anadirLineaPresupuesto();
+
+    if (id !== null) {
+        const p = state.presupuestos.find(x => String(x.id) === String(id));
+        if (!p) return;
+        document.getElementById('pres-modal-titulo').textContent = `Editar presupuesto · ${p.numero}`;
+        document.getElementById('pres-btn-guardar').textContent = 'Guardar cambios';
+        document.getElementById('pres-id-edicion').value = String(p.id);
+        document.getElementById('pres-numero').value = p.numero;
+        document.getElementById('pres-fecha').value = p.fecha || fechaDefecto;
+        document.getElementById('pres-validez').value = p.validez || '';
+        document.getElementById('pres-cliente').value = String(p.clienteId || '');
+        document.getElementById('pres-irpf').value = String(p.retencionPct ?? 0);
+        document.getElementById('pres-notas').value = p.notas || '';
+
+        const lineas = Array.isArray(p.lineas) && p.lineas.length
+            ? p.lineas
+            : [{ descripcion: 'Servicios presupuestados', cantidad: 1, precio: p.base, iva: 21 }];
+        lineas.forEach(l => anadirLineaPresupuesto(l));
+    } else {
+        document.getElementById('pres-modal-titulo').textContent = 'Nuevo presupuesto';
+        document.getElementById('pres-btn-guardar').textContent = 'Guardar presupuesto';
+        document.getElementById('pres-fecha').value = fechaDefecto;
+        document.getElementById('pres-validez').value = '';
+        document.getElementById('pres-numero').value = calcularSiguienteNumeroPresupuesto(anioActivoStr);
+        document.getElementById('pres-irpf').value = String(state.perfil.retencionDefecto ?? 0);
+        document.getElementById('pres-notas').value = '';
+        anadirLineaPresupuesto();
+    }
+
+    calcularPresupuesto();
     document.getElementById('modal-presupuesto').classList.remove('hidden');
 }
+
+function editarPresupuesto(id) { abrirModalPresupuesto(id); }
 function cerrarModalPresupuesto() { document.getElementById('modal-presupuesto').classList.add('hidden'); }
-function anadirLineaPresupuesto() {
+
+function anadirLineaPresupuesto(datos = {}) {
+    const ivaDef = datos.iva !== undefined ? Number(datos.iva) : (state.perfil.ivaDefecto ?? 21);
     const div = document.createElement('div');
-    div.className = 'grid grid-cols-12 gap-2 bg-slate-50 p-2 rounded-xl border';
+    div.className = 'grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-xl border';
     div.dataset.plinea = '1';
     div.innerHTML = `
-        <div class="col-span-6"><input data-f="desc" required placeholder="Concepto" class="w-full border rounded-lg p-2 text-sm bg-white"></div>
-        <div class="col-span-3"><input data-f="cant" type="number" value="1" oninput="calcularPresupuesto()" class="w-full border rounded-lg p-2 text-sm bg-white"></div>
-        <div class="col-span-3"><input data-f="precio" type="number" step="0.01" placeholder="Precio €" oninput="calcularPresupuesto()" class="w-full border rounded-lg p-2 text-sm bg-white"></div>
+        <div class="col-span-12 sm:col-span-5"><input data-f="desc" required value="${String(datos.descripcion || '').replace(/"/g, '&quot;')}" placeholder="Concepto o partida" class="w-full border rounded-lg p-2 text-sm bg-white"></div>
+        <div class="col-span-3 sm:col-span-2"><input data-f="cant" type="number" step="0.01" value="${datos.cantidad ?? 1}" oninput="calcularPresupuesto()" class="w-full border rounded-lg p-2 text-sm bg-white"></div>
+        <div class="col-span-4 sm:col-span-2"><input data-f="precio" type="number" step="0.01" value="${datos.precio ?? ''}" placeholder="Precio €" oninput="calcularPresupuesto()" class="w-full border rounded-lg p-2 text-sm bg-white"></div>
+        <div class="col-span-4 sm:col-span-2"><select data-f="iva" onchange="calcularPresupuesto()" class="w-full border rounded-lg p-2 text-sm bg-white"><option value="21" ${ivaDef === 21 ? 'selected' : ''}>21%</option><option value="10" ${ivaDef === 10 ? 'selected' : ''}>10%</option><option value="4" ${ivaDef === 4 ? 'selected' : ''}>4%</option><option value="0" ${ivaDef === 0 ? 'selected' : ''}>0%</option></select></div>
+        <div class="col-span-1 text-center"><button type="button" onclick="this.closest('[data-plinea]').remove(); if(!document.querySelector('[data-plinea]')) anadirLineaPresupuesto(); calcularPresupuesto();" class="text-rose-600 p-1"><i class="fa-solid fa-trash"></i></button></div>
     `;
     document.getElementById('pres-lineas').appendChild(div);
     calcularPresupuesto();
 }
+
 function calcularPresupuesto() {
-    let base = 0;
+    let base = 0, iva = 0;
+    const lineas = [];
     document.querySelectorAll('#pres-lineas [data-plinea]').forEach(el => {
-        base += (Number(el.querySelector('[data-f="cant"]').value) || 0) * (Number(el.querySelector('[data-f="precio"]').value) || 0);
+        const desc = el.querySelector('[data-f="desc"]').value.trim();
+        const cant = Number(el.querySelector('[data-f="cant"]').value) || 0;
+        const precio = Number(el.querySelector('[data-f="precio"]').value) || 0;
+        const iv = Number(el.querySelector('[data-f="iva"]').value) || 0;
+        base += cant * precio;
+        iva += (cant * precio) * iv / 100;
+        lineas.push({ descripcion: desc, cantidad: cant, precio, iva: iv });
     });
-    const iva = base * (state.perfil.ivaDefecto ?? 21) / 100;
-    const total = base + iva;
+    const irpfPct = Number(document.getElementById('pres-irpf')?.value) || 0;
+    const retencion = base * irpfPct / 100;
+    const total = base + iva - retencion;
+
     document.getElementById('pres-total-final').textContent = formatEur(total);
-    return { base, iva, total };
+    const desglose = document.getElementById('pres-desglose-totales');
+    if (desglose) desglose.textContent = `Base: ${formatEur(base)} · IVA: ${formatEur(iva)} · IRPF: -${formatEur(retencion)}`;
+    return { base, iva, retencion, retencionPct: irpfPct, total, lineas };
 }
+
 function guardarPresupuesto(e) {
     e.preventDefault();
+    const idEdicion = document.getElementById('pres-id-edicion').value;
+    const existente = idEdicion ? state.presupuestos.find(x => String(x.id) === String(idEdicion)) : null;
+
     const c = state.clientes.find(x => String(x.id) === document.getElementById('pres-cliente').value);
-    if (!c) return;
+    if (!c) { alert('Selecciona un cliente.'); return; }
     const t = calcularPresupuesto();
-    state.presupuestos.push({
-        id: Date.now(), numero: document.getElementById('pres-numero').value,
-        fecha: new Date().toISOString().slice(0, 10), clienteId: c.id, cliente: c.nombre, nif: c.nif,
-        estado: 'pendiente', ...t
-    });
+    const fecha = document.getElementById('pres-fecha').value;
+
+    const datos = {
+        id: existente ? existente.id : Date.now(),
+        numero: existente ? existente.numero : document.getElementById('pres-numero').value,
+        fecha,
+        validez: document.getElementById('pres-validez').value,
+        clienteId: c.id,
+        cliente: c.nombre,
+        nif: c.nif,
+        notas: document.getElementById('pres-notas').value.trim(),
+        estado: existente ? existente.estado : 'pendiente',
+        ...t
+    };
+
+    if (existente) {
+        Object.assign(existente, datos);
+    } else {
+        state.presupuestos.push(datos);
+    }
+
     cerrarModalPresupuesto();
     saveStorage();
 }
+
+function eliminarPresupuesto(id) {
+    const p = state.presupuestos.find(x => String(x.id) === String(id));
+    if (!p) return;
+    if (!confirm(`¿Eliminar el presupuesto ${p.numero} de ${p.cliente}?`)) return;
+    state.presupuestos = state.presupuestos.filter(x => String(x.id) !== String(id));
+    saveStorage();
+}
+
+function generarPresupuestoPDF(id) {
+    const p = state.presupuestos.find(x => String(x.id) === String(id));
+    if (!p) return;
+    const cli = state.clientes.find(c => String(c.id) === String(p.clienteId)) || {};
+    const lineas = Array.isArray(p.lineas) && p.lineas.length
+        ? p.lineas
+        : [{ descripcion: 'Propuesta de servicios', cantidad: 1, precio: p.base, iva: 21 }];
+
+    const filas = lineas.map(l => {
+        const sub = (Number(l.cantidad) || 1) * (Number(l.precio) || 0);
+        return `<tr>
+            <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;">${l.cantidad}</td>
+            <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;">${l.descripcion} <span style="color:#94a3b8;font-size:9px;">(IVA ${l.iva}%)</span></td>
+            <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;">${formatEur(l.precio)}</td>
+            <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:bold;">${formatEur(sub)}</td>
+        </tr>`;
+    }).join('');
+
+    const nombreEmisor = state.perfil.nombre || 'Mi Actividad Profesional';
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Presupuesto ${p.numero}</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; color: #334155; padding: 30px; font-size: 11px; }
+        .head { display: flex; justify-content: space-between; border-bottom: 2px solid #5c7684; padding-bottom: 14px; margin-bottom: 20px; }
+        h1 { margin: 0; color: #5c7684; font-size: 22px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th { text-align: left; color: #5c7684; border-bottom: 1.5px solid #5c7684; padding: 8px 6px; }
+        .tot { width: 260px; margin-left: auto; }
+        .tot div { display: flex; justify-content: space-between; padding: 4px 0; }
+        .grand { border-top: 1.5px solid #5c7684; font-size: 14px; font-weight: bold; margin-top: 6px; padding-top: 6px; }
+    </style></head><body>
+    <div class="head">
+        <div><h1>PRESUPUESTO · ${p.numero}</h1><p>${nombreEmisor} · NIF: ${state.perfil.nif || ''}</p></div>
+        <div style="text-align:right;"><p><strong>Fecha:</strong> ${fechaLocal(p.fecha)}</p>${p.validez ? `<p><strong>Válido hasta:</strong> ${fechaLocal(p.validez)}</p>` : ''}</div>
+    </div>
+    <p><strong>Cliente:</strong> ${cli.nombre || p.cliente} (${cli.nif || p.nif || ''})</p>
+    <table><thead><tr><th>Cant.</th><th>Descripción</th><th style="text-align:right;">Precio</th><th style="text-align:right;">Importe</th></tr></thead><tbody>${filas}</tbody></table>
+    <div class="tot">
+        <div><span>Base imponible:</span><strong>${formatEur(p.base)}</strong></div>
+        <div><span>IVA:</span><strong>${formatEur(p.iva)}</strong></div>
+        ${Number(p.retencion) > 0 ? `<div><span>Retención IRPF:</span><strong>-${formatEur(p.retencion)}</strong></div>` : ''}
+        <div class="grand"><span>TOTAL PRESUPUESTO:</span><span>${formatEur(p.total)}</span></div>
+    </div>
+    ${p.notas ? `<p style="margin-top:25px;padding:10px;background:#f8fafc;border-left:3px solid #5c7684;"><strong>Condiciones:</strong> ${p.notas}</p>` : ''}
+    <p style="margin-top:40px;font-size:9px;color:#94a3b8;">Documento informativo sin validez como factura.</p>
+    <script>window.onload=()=>window.print();<\/script></body></html>`);
+    w.document.close();
+}
+
 function renderPresupuestos() {
     const lista = document.getElementById('presupuestos-lista');
     document.getElementById('presupuestos-vacio').classList.toggle('hidden', state.presupuestos.length > 0);
-    lista.innerHTML = state.presupuestos.map(p => `
+    lista.innerHTML = state.presupuestos.slice().reverse().map(p => `
         <article class="border rounded-2xl p-4 bg-white shadow-sm flex flex-col justify-between gap-3">
-            <div class="flex justify-between items-start"><div><span class="text-xs font-bold text-blue-600">${p.numero}</span><h4 class="font-bold text-slate-900">${p.cliente}</h4></div><span class="text-lg font-black text-slate-900">${formatEur(p.total)}</span></div>
-            ${p.estado !== 'convertido' ? `<button onclick="convertirPresupuesto(${p.id})" class="w-full py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold">Convertir en Factura</button>` : '<span class="text-xs font-bold text-purple-700">Facturado</span>'}
+            <div class="flex justify-between items-start gap-2">
+                <div>
+                    <span class="text-xs font-extrabold text-blue-600">${p.numero} · ${fechaLocal(p.fecha)}</span>
+                    <h4 class="font-bold text-slate-900 text-base">${p.cliente}</h4>
+                    ${p.validez ? `<p class="text-[11px] text-slate-400">Válido hasta: ${fechaLocal(p.validez)}</p>` : ''}
+                </div>
+                <span class="text-lg font-black text-slate-900">${formatEur(p.total)}</span>
+            </div>
+            <div class="flex flex-wrap gap-2 pt-2 border-t">
+                <button onclick="generarPresupuestoPDF(${p.id})" class="px-3 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>
+                ${p.estado !== 'convertido' ? `<button onclick="editarPresupuesto(${p.id})" class="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-xs font-bold"><i class="fa-solid fa-pen mr-1"></i>Editar</button>` : ''}
+                ${p.estado !== 'convertido' ? `<button onclick="convertirPresupuesto(${p.id})" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold"><i class="fa-solid fa-check mr-1"></i>A Factura</button>` : '<span class="px-3 py-2 text-xs font-bold text-purple-700 bg-purple-50 rounded-xl">Facturado</span>'}
+                <button onclick="eliminarPresupuesto(${p.id})" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold ml-auto"><i class="fa-solid fa-trash"></i></button>
+            </div>
         </article>
     `).join('');
 }
-function convertirPresupuesto(id) {
-    const p = state.presupuestos.find(x => x.id === id);
+
+async function convertirPresupuesto(id) {
+    const p = state.presupuestos.find(x => String(x.id) === String(id));
     if (!p) return;
     const hoy = new Date().toISOString().slice(0, 10);
-    state.ingresos.push({
-        id: Date.now(), numero: `F-2026-${String(state.ingresos.length + 1).padStart(4, '0')}`,
-        fecha: hoy, clienteId: p.clienteId, cliente: p.cliente, nif: p.nif,
-        trimestre: Math.ceil((new Date().getMonth() + 1) / 3),
-        base: p.base, iva: p.iva, retencion: 0, total: p.total, estado: 'pendiente', movimientosPago: []
-    });
+    const anioActivoStr = String(state.ejercicioActivo || hoy.slice(0, 4));
+    const fechaFactura = hoy.startsWith(anioActivoStr) ? hoy : `${anioActivoStr}-01-15`;
+    const numFactura = calcularSiguienteNumeroFactura(anioActivoStr);
+
+    const nuevaFactura = {
+        id: Date.now(),
+        numero: numFactura,
+        fecha: fechaFactura,
+        clienteId: p.clienteId,
+        cliente: p.cliente,
+        nif: p.nif,
+        trimestre: Math.ceil((new Date(fechaFactura).getMonth() + 1) / 3),
+        lineas: p.lineas || [{ descripcion: 'Servicios según presupuesto ' + p.numero, cantidad: 1, precio: p.base, iva: 21 }],
+        base: p.base,
+        iva: p.iva,
+        retencion: p.retencion || 0,
+        retencionPct: p.retencionPct || 0,
+        total: p.total,
+        estado: 'pendiente',
+        movimientosPago: []
+    };
+
+    const ultimaFactura = state.ingresos[state.ingresos.length - 1];
+    const hashPrevio = ultimaFactura?.verifactu?.hashActual || '0000000000000000000000000000000000000000000000000000000000000000';
+    nuevaFactura.verifactu = await generarHuellaVerifactu(nuevaFactura, state.perfil, hashPrevio);
+
+    state.ingresos.push(nuevaFactura);
     p.estado = 'convertido';
     saveStorage();
+    alert(`Presupuesto ${p.numero} convertido en la factura ${numFactura} (encadenada con Veri*factu).`);
 }
 
 function renderVencimientos() {
@@ -1299,9 +1504,10 @@ function updateAEATView() {
         cont.innerHTML = `<div class="border-2 border-slate-800 p-4 space-y-3"><div class="flex justify-between border-b-2 border-slate-800 pb-2"><h3 class="font-extrabold text-sm">AEAT · MODELO 130 (IRPF Acumulativo 1T-${period})</h3><span class="text-2xl font-black">130</span></div><p class="font-bold">${state.perfil.nif} - ${state.perfil.nombre}</p><div class="font-mono space-y-1"><p class="flex justify-between"><span>[01] Ingresos Acumulados:</span><span>${formatEur(d.ingBaseAcum)}</span></p><p class="flex justify-between"><span>[02] Gastos Deducibles Acumulados:</span><span>${formatEur(d.gasBaseAcum)}</span></p><p class="flex justify-between text-emerald-700"><span>[03b] Reducción 5% Difícil Justificación:</span><span>-${formatEur(d.gastosDificilJustificacion)}</span></p>
         <p class="flex justify-between"><span>[03] Rendimiento Neto Reducido:</span><span>${formatEur(d.rendNetoAcum)}</span></p><p class="flex justify-between"><span>[04] 20% Rendimiento Neto:</span><span>${formatEur(d.cuota20Acum)}</span></p><p class="flex justify-between text-rose-700"><span>[05] Pagos trimestres anteriores:</span><span>-${formatEur(d.pagosAnteriores)}</span></p><p class="flex justify-between text-rose-700"><span>[06] Retenciones soportadas en facturas:</span><span>-${formatEur(d.retencionesAcum)}</span></p><p class="flex justify-between font-black bg-blue-50 p-1"><span>[07] TOTAL A INGRESAR:</span><span>${formatEur(d.irpf130APagar)}</span></p></div></div>`;
     } else {
-        const totI = state.ingresos.reduce((s, i) => s + i.iva, 0);
-        const totG = state.gastos.filter(g => g.tipo !== 'gasto').reduce((s, g) => s + g.iva, 0);
-        cont.innerHTML = `<div class="border-2 border-slate-800 p-4 space-y-3"><h3 class="font-extrabold text-sm border-b-2 border-slate-800 pb-2">MODELO 390 · RESUMEN ANUAL IVA</h3><p class="flex justify-between font-mono"><span>IVA Repercutido:</span><span>${formatEur(totI)}</span></p><p class="flex justify-between font-mono"><span>IVA Soportado Deducible:</span><span>${formatEur(totG)}</span></p><p class="flex justify-between font-mono font-black bg-blue-50 p-1"><span>Resultado Anual:</span><span>${formatEur(totI - totG)}</span></p></div>`;
+        const anioAct = String(state.ejercicioActivo || 2026);
+        const totI = state.ingresos.filter(i => String(i.fecha || '').startsWith(anioAct)).reduce((s, i) => s + i.iva, 0);
+        const totG = state.gastos.filter(g => String(g.fecha || '').startsWith(anioAct) && g.tipo !== 'gasto').reduce((s, g) => s + g.iva, 0);
+        cont.innerHTML = `<div class="border-2 border-slate-800 p-4 space-y-3"><h3 class="font-extrabold text-sm border-b-2 border-slate-800 pb-2">MODELO 390 · RESUMEN ANUAL IVA (${anioAct})</h3><p class="flex justify-between font-mono"><span>IVA Repercutido (${anioAct}):</span><span>${formatEur(totI)}</span></p><p class="flex justify-between font-mono"><span>IVA Soportado Deducible (${anioAct}):</span><span>${formatEur(totG)}</span></p><p class="flex justify-between font-mono font-black bg-blue-50 p-1"><span>Resultado Anual ${anioAct}:</span><span>${formatEur(totI - totG)}</span></p></div>`;
     }
 }
 
@@ -1902,6 +2108,11 @@ Object.assign(window, {
     nuevoClienteDesdeFactura,
     renderClientes,
     abrirModalPresupuesto,
+    editarPresupuesto,
+    eliminarPresupuesto,
+    generarPresupuestoPDF,
+    actualizarPrefijoNumeroPresupuesto,
+    actualizarNumeroFacturaSegunFecha,
     cerrarModalPresupuesto,
     anadirLineaPresupuesto,
     calcularPresupuesto,
