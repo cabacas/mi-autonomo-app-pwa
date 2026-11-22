@@ -331,15 +331,42 @@
                 </div>
             </section>
 
-            <!-- VISTA: DIRECTORIO DE CLIENTES -->
+            <!-- VISTA: DIRECTORIO DE CLIENTES (GESTIÓN COMPLETA + MÓVIL) -->
             <section id="tab-clientes" class="tab-content hidden space-y-4">
                 <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                    <div><h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-address-book text-blue-600 mr-2"></i>Directorio de clientes</h2></div>
-                    <button onclick="openClienteModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold"><i class="fa-solid fa-plus mr-1"></i> Nuevo cliente</button>
+                    <div>
+                        <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-address-book text-blue-600 mr-2"></i>Directorio de clientes</h2>
+                        <p class="text-xs text-slate-500">Consulta expedientes, edita datos fiscales, llama con un toque o factura directamente</p>
+                    </div>
+                    <button onclick="openClienteModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm"><i class="fa-solid fa-plus mr-1"></i> Nuevo cliente</button>
                 </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><p id="clientes-contador" class="text-xs font-bold text-slate-500">0 clientes</p><input id="clientes-busqueda" type="search" oninput="renderClientes()" placeholder="Buscar por nombre o NIF…" class="border rounded-xl px-3 py-2 text-sm w-full sm:w-80"></div>
-                    <div class="overflow-x-auto"><table class="w-full text-sm text-left text-slate-600"><thead class="text-xs uppercase bg-slate-100 text-slate-700"><tr><th class="p-3">Cliente</th><th class="p-3">NIF</th><th class="p-3">Contacto</th><th class="p-3 text-center">Facturas</th><th class="p-3 text-center">Acciones</th></tr></thead><tbody id="tabla-clientes-body"></tbody></table></div>
+
+                <div class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <p id="clientes-contador" class="text-xs font-bold text-slate-500">0 clientes</p>
+                        <input id="clientes-busqueda" type="search" oninput="renderClientes()" placeholder="Buscar por nombre, NIF, teléfono o población…" class="border rounded-xl px-3 py-2 text-sm w-full sm:w-80">
+                    </div>
+
+                    <!-- TARJETAS MÓVIL (< md) -->
+                    <div id="cards-clientes-mobile" class="grid grid-cols-1 gap-3 md:hidden"></div>
+
+                    <!-- TABLA ESCRITORIO (>= md) -->
+                    <div class="hidden md:block overflow-x-auto">
+                        <table class="w-full text-sm text-left text-slate-600">
+                            <thead class="text-xs uppercase bg-slate-100 text-slate-700">
+                                <tr>
+                                    <th class="p-3">Cliente / Localidad</th>
+                                    <th class="p-3">NIF / CIF</th>
+                                    <th class="p-3">Contacto</th>
+                                    <th class="p-3 text-right">Facturado</th>
+                                    <th class="p-3 text-center">Docs</th>
+                                    <th class="p-3 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-clientes-body"></tbody>
+                        </table>
+                    </div>
+                    <p id="clientes-vacio" class="hidden text-center text-sm text-slate-500 py-8">No hay clientes que coincidan con la búsqueda.</p>
                 </div>
             </section>
 
@@ -659,19 +686,56 @@
         </div>
     </div>
 
-    <!-- MODAL CLIENTE -->
-    <div id="modal-cliente" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-[60] p-4">
-        <div class="bg-white rounded-2xl shadow-xl p-5 w-full max-w-md">
-            <div class="flex justify-between items-center border-b pb-3 mb-4"><h3 class="text-lg font-bold">Nuevo cliente</h3><button type="button" onclick="closeClienteModal()" class="text-slate-400 text-xl">&times;</button></div>
-            <form id="form-cliente" onsubmit="saveCliente(event)" class="space-y-3">
-                <div><label class="block text-xs font-bold text-slate-600 mb-1">Nombre / Razón social *</label><input id="cli-nombre" required class="w-full border rounded-xl p-2.5 text-sm"></div>
-                <div><label class="block text-xs font-bold text-slate-600 mb-1">NIF / CIF *</label><input id="cli-nif" oninput="comprobarInputFiscal('cli-nif', 'cli-nif-feedback')" required class="w-full border rounded-xl p-2.5 text-sm uppercase"><p id="cli-nif-feedback" class="hidden"></p></div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Email</label><input id="cli-email" type="email" class="w-full border rounded-xl p-2.5 text-sm"></div>
-                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Teléfono</label><input id="cli-telefono" class="w-full border rounded-xl p-2.5 text-sm"></div>
+    <!-- MODAL ALTA / EDICIÓN AMPLIADA DE CLIENTE -->
+    <div id="modal-cliente" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-[60] p-0 sm:p-4 overflow-y-auto">
+        <div class="bg-white sm:rounded-2xl shadow-xl p-5 sm:p-6 w-full max-w-xl h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <div>
+                    <h3 id="cliente-modal-titulo" class="text-lg font-extrabold text-slate-800">Nuevo cliente</h3>
+                    <p class="text-xs text-slate-500">Datos fiscales para facturación AEAT y contacto directo</p>
                 </div>
-                <div class="flex justify-end gap-2 pt-3 border-t"><button type="button" onclick="closeClienteModal()" class="px-4 py-2 bg-slate-100 rounded-xl text-sm font-bold">Cancelar</button><button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold">Guardar</button></div>
+                <button type="button" onclick="closeClienteModal()" class="w-9 h-9 rounded-full bg-slate-100 text-slate-600 text-xl">&times;</button>
+            </div>
+            <form id="form-cliente" onsubmit="saveCliente(event)" class="space-y-3">
+                <input type="hidden" id="cli-id" value="">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="sm:col-span-2"><label class="block text-xs font-bold text-slate-600 mb-1">Nombre o Razón Social *</label><input id="cli-nombre" required maxlength="120" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. Construcciones Vallès SL"></div>
+                    <div><label class="block text-xs font-bold text-slate-600 mb-1">NIF / CIF / NIE *</label><input id="cli-nif" oninput="comprobarInputFiscal('cli-nif', 'cli-nif-feedback')" required maxlength="20" class="w-full border rounded-xl p-2.5 text-sm uppercase" placeholder="Ej. B12345674"><p id="cli-nif-feedback" class="hidden"></p></div>
+                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Teléfono / Móvil</label><input id="cli-telefono" type="tel" maxlength="30" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. 600123456"></div>
+                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Correo electrónico</label><input id="cli-email" type="email" maxlength="120" class="w-full border rounded-xl p-2.5 text-sm" placeholder="facturacion@cliente.es"></div>
+                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Código Postal</label><input id="cli-cp" maxlength="10" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. 08221"></div>
+                    <div class="sm:col-span-2"><label class="block text-xs font-bold text-slate-600 mb-1">Dirección Fiscal (Calle, nº, piso)</label><input id="cli-direccion" maxlength="180" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. Carrer Major, 14, 2n 1a"></div>
+                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Población / Ciudad</label><input id="cli-poblacion" maxlength="80" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. Terrassa"></div>
+                    <div><label class="block text-xs font-bold text-slate-600 mb-1">Provincia</label><input id="cli-provincia" maxlength="80" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. Barcelona"></div>
+                    <div class="sm:col-span-2"><label class="block text-xs font-bold text-slate-600 mb-1">Notas internas / Condiciones habituales</label><textarea id="cli-notas" rows="2" maxlength="500" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Persona de contacto, forma de pago preferida, observaciones…"></textarea></div>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" onclick="closeClienteModal()" class="px-4 py-2.5 bg-slate-100 rounded-xl text-sm font-bold">Cancelar</button>
+                    <button type="submit" id="cli-btn-guardar" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold">Guardar cliente</button>
+                </div>
             </form>
+        </div>
+    </div>
+
+    <!-- MODAL FICHA / EXPEDIENTE INDIVIDUAL DEL CLIENTE -->
+    <div id="modal-ficha-cliente" class="fixed inset-0 bg-slate-900/65 hidden items-center justify-center z-[70] p-0 sm:p-4 overflow-y-auto" onclick="if(event.target===this) cerrarFichaCliente()">
+        <div class="bg-white sm:rounded-2xl shadow-2xl w-full max-w-3xl h-full sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden">
+            <div class="border-b px-4 sm:px-6 py-4 flex items-start justify-between gap-3 bg-slate-50 shrink-0">
+                <div class="min-w-0 flex-1">
+                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-600">Expediente de Cliente</span>
+                    <h3 id="ficha-cli-titulo" class="text-xl font-extrabold text-slate-900 truncate">Cliente</h3>
+                    <p id="ficha-cli-subtitulo" class="text-xs text-slate-500 mt-0.5 truncate"></p>
+                </div>
+                <button type="button" onclick="cerrarFichaCliente()" class="w-9 h-9 rounded-full bg-white border text-slate-600 text-xl shrink-0">&times;</button>
+            </div>
+            <div id="ficha-cli-contenido" class="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1"></div>
+            <div class="border-t px-4 sm:px-6 py-3.5 bg-slate-50 flex flex-wrap justify-between items-center gap-2 shrink-0">
+                <button id="ficha-cli-facturar" type="button" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold"><i class="fa-solid fa-file-invoice-dollar mr-1.5"></i>Nueva factura</button>
+                <div class="flex gap-2 ml-auto">
+                    <button id="ficha-cli-editar" type="button" class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold"><i class="fa-solid fa-pen mr-1.5"></i>Editar datos</button>
+                    <button type="button" onclick="cerrarFichaCliente()" class="px-4 py-2.5 rounded-xl bg-white border text-slate-700 text-xs sm:text-sm font-bold">Cerrar</button>
+                </div>
+            </div>
         </div>
     </div>
 
