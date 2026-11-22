@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mi-autonomo-pwa-v1';
+const CACHE_NAME = 'mi-autonomo-pwa-v2';
 
 const APP_SHELL = [
   './',
@@ -11,7 +11,8 @@ const APP_SHELL = [
   './js/storage.js',
   './js/fiscal.js',
   './js/charts.js',
-  './js/ocr.js'
+  './js/ocr.js',
+  './js/einvoice.js'
 ];
 
 // Instalación: cachear archivos locales de la app
