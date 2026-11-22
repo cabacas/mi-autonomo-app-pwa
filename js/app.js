@@ -770,60 +770,270 @@ function deleteIngreso(id) {
 }
 
 function renderClientes() {
-    const q = (document.getElementById('clientes-busqueda')?.value || '').toLowerCase();
-    const filtrados = state.clientes.filter(c => c.nombre.toLowerCase().includes(q) || c.nif.toLowerCase().includes(q) || (c.telefono || '').includes(q));
-    document.getElementById('clientes-contador').textContent = `${filtrados.length} clientes`;
-    document.getElementById('tabla-clientes-body').innerHTML = filtrados.map(c => {
+    const q = (document.getElementById('clientes-busqueda')?.value || '').toLowerCase().trim();
+    const filtrados = state.clientes.filter(c =>
+        [c.nombre, c.nif, c.telefono, c.email, c.poblacion, c.provincia].some(v => String(v || '').toLowerCase().includes(q))
+    );
+
+    document.getElementById('clientes-contador').textContent = `${filtrados.length} cliente${filtrados.length === 1 ? '' : 's'}`;
+    document.getElementById('clientes-vacio')?.classList.toggle('hidden', filtrados.length > 0);
+
+    const tbody = document.getElementById('tabla-clientes-body');
+    const cardsMobile = document.getElementById('cards-clientes-mobile');
+    if (tbody) tbody.innerHTML = '';
+    if (cardsMobile) cardsMobile.innerHTML = '';
+
+    filtrados.forEach(c => {
+        const facturasCli = state.ingresos.filter(i => String(i.clienteId) === String(c.id));
+        const totalFacturado = facturasCli.reduce((s, f) => s + (Number(f.base) || 0), 0);
+        const localidad = [c.cp, c.poblacion, c.provincia].filter(Boolean).join(' · ') || 'Sin localidad';
+
         const telLimpio = String(c.telefono || '').replace(/[^+\d]/g, '');
         const enlaceTel = telLimpio
             ? `<a href="tel:${telLimpio}" class="inline-flex items-center gap-1.5 font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition"><i class="fa-solid fa-phone text-[11px]"></i> ${c.telefono}</a>`
             : '<span class="text-slate-400">Sin teléfono</span>';
         const enlaceMail = c.email
-            ? `<a href="mailto:${c.email}" class="text-blue-600 hover:underline block mt-0.5">${c.email}</a>`
+            ? `<a href="mailto:${c.email}" class="text-blue-600 hover:underline block mt-0.5 truncate max-w-[190px]">${c.email}</a>`
             : '';
 
-        return `
-        <tr class="border-b hover:bg-slate-50">
-            <td class="p-3 font-bold text-slate-900">${c.nombre}</td>
-            <td class="p-3 font-mono text-xs">${c.nif}</td>
-            <td class="p-3 text-xs">${enlaceTel}${enlaceMail}</td>
-            <td class="p-3 text-center font-bold text-blue-700">${state.ingresos.filter(i => i.clienteId === c.id).length}</td>
-            <td class="p-3 text-center"><button onclick="eliminarCliente(${c.id})" class="text-rose-600 hover:text-rose-800 p-1.5" title="Eliminar"><i class="fa-solid fa-trash"></i></button></td>
-        </tr>`;
-    }).join('');
+        if (tbody) {
+            tbody.innerHTML += `
+            <tr class="border-b hover:bg-slate-50">
+                <td class="p-3">
+                    <button type="button" onclick="verFichaCliente(${c.id})" class="font-bold text-slate-900 hover:text-blue-700 text-left">${c.nombre}</button>
+                    <div class="text-[11px] text-slate-400">${localidad}</div>
+                </td>
+                <td class="p-3 font-mono text-xs">${c.nif}</td>
+                <td class="p-3 text-xs">${enlaceTel}${enlaceMail}</td>
+                <td class="p-3 text-right font-bold text-slate-800">${formatEur(totalFacturado)}</td>
+                <td class="p-3 text-center"><span class="rounded-full bg-blue-50 text-blue-700 px-2.5 py-0.5 text-xs font-bold">${facturasCli.length}</span></td>
+                <td class="p-3 text-center whitespace-nowrap">
+                    <button onclick="verFichaCliente(${c.id})" class="text-emerald-700 hover:text-emerald-900 p-1.5" title="Ver expediente"><i class="fa-solid fa-folder-open"></i></button>
+                    <button onclick="editarCliente(${c.id})" class="text-blue-600 hover:text-blue-800 p-1.5" title="Editar datos"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="eliminarCliente(${c.id})" class="text-rose-600 hover:text-rose-800 p-1.5" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>`;
+        }
+
+        if (cardsMobile) {
+            cardsMobile.innerHTML += `
+            <article class="app-card p-4 space-y-2.5 border-l-4 border-blue-600">
+                <div class="flex justify-between items-start gap-2">
+                    <div class="min-w-0 flex-1" onclick="verFichaCliente(${c.id})">
+                        <span class="text-[11px] font-mono font-bold text-slate-500">${c.nif}</span>
+                        <h4 class="font-extrabold text-slate-900 text-base truncate">${c.nombre}</h4>
+                        <p class="text-xs text-slate-500 truncate">${localidad}</p>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <span class="text-[10px] font-bold uppercase text-slate-400 block">Facturado</span>
+                        <span class="text-sm font-black text-blue-700">${formatEur(totalFacturado)}</span>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                    ${telLimpio ? `<a href="tel:${telLimpio}" class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl"><i class="fa-solid fa-phone"></i> Llamar</a>` : ''}
+                    ${c.email ? `<a href="mailto:${c.email}" class="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl"><i class="fa-solid fa-envelope"></i> Email</a>` : ''}
+                </div>
+                <div class="flex gap-2 pt-2 border-t">
+                    <button onclick="verFichaCliente(${c.id})" class="flex-1 py-2 rounded-xl bg-slate-100 text-slate-800 text-xs font-bold"><i class="fa-solid fa-folder-open mr-1"></i>Ficha (${facturasCli.length})</button>
+                    <button onclick="editarCliente(${c.id})" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
+                    <button onclick="eliminarCliente(${c.id})" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </article>`;
+        }
+    });
+}
+
+function verFichaCliente(id) {
+    const c = state.clientes.find(x => String(x.id) === String(id));
+    if (!c) return;
+
+    const facturas = state.ingresos.filter(i => String(i.clienteId) === String(c.id)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+    const presupuestos = (state.presupuestos || []).filter(p => String(p.clienteId) === String(c.id));
+
+    const baseFacturada = facturas.reduce((s, f) => s + (Number(f.base) || 0), 0);
+    const totalConImpuestos = facturas.reduce((s, f) => s + (Number(f.total) || 0), 0);
+    const pendienteCobro = facturas.reduce((s, f) => s + importePendiente(f), 0);
+    const cobradoReal = Math.max(0, totalConImpuestos - pendienteCobro);
+
+    const telLimpio = String(c.telefono || '').replace(/[^+\d]/g, '');
+    const dirCompleta = [c.direccion, [c.cp, c.poblacion, c.provincia].filter(Boolean).join(' · ')].filter(Boolean).join('<br>') || 'Sin dirección fiscal registrada';
+
+    document.getElementById('ficha-cli-titulo').textContent = c.nombre;
+    document.getElementById('ficha-cli-subtitulo').textContent = `NIF/CIF: ${c.nif} · ${facturas.length} factura(s) · ${presupuestos.length} presupuesto(s)`;
+
+    document.getElementById('ficha-cli-contenido').innerHTML = `
+        <div class="grid grid-cols-3 gap-2 sm:gap-3">
+            <div class="rounded-xl border p-3 bg-blue-50/50"><p class="text-[10px] font-bold uppercase text-slate-500">Facturado (Base)</p><p class="text-base sm:text-lg font-extrabold text-blue-700 mt-0.5">${formatEur(baseFacturada)}</p></div>
+            <div class="rounded-xl border p-3 bg-emerald-50/50"><p class="text-[10px] font-bold uppercase text-slate-500">Cobrado</p><p class="text-base sm:text-lg font-extrabold text-emerald-700 mt-0.5">${formatEur(cobradoReal)}</p></div>
+            <div class="rounded-xl border p-3 bg-rose-50/50"><p class="text-[10px] font-bold uppercase text-slate-500">Pendiente</p><p class="text-base sm:text-lg font-extrabold text-rose-700 mt-0.5">${formatEur(pendienteCobro)}</p></div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="rounded-xl border p-3.5 space-y-1.5">
+                <h4 class="text-xs font-extrabold uppercase text-slate-500">Contacto Directo</h4>
+                <p class="text-sm">${telLimpio ? `<a href="tel:${telLimpio}" class="font-bold text-emerald-700 underline"><i class="fa-solid fa-phone mr-1"></i>${c.telefono}</a>` : '<span class="text-slate-400">Sin teléfono</span>'}</p>
+                <p class="text-sm">${c.email ? `<a href="mailto:${c.email}" class="text-blue-600 underline"><i class="fa-solid fa-envelope mr-1"></i>${c.email}</a>` : '<span class="text-slate-400">Sin email</span>'}</p>
+            </div>
+            <div class="rounded-xl border p-3.5 space-y-1.5">
+                <h4 class="text-xs font-extrabold uppercase text-slate-500">Domicilio Fiscal</h4>
+                <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">${dirCompleta}</p>
+            </div>
+        </div>
+
+        ${c.notas ? `<div class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900"><strong>Notas internas:</strong> ${c.notas}</div>` : ''}
+
+        <div class="space-y-2">
+            <h4 class="text-xs font-extrabold uppercase text-slate-600">Historial de Facturas Emitidas</h4>
+            ${facturas.length ? `
+            <div class="border rounded-xl overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-100 text-slate-700"><tr><th class="p-2.5">Nº</th><th class="p-2.5">Fecha</th><th class="p-2.5 text-right">Total</th><th class="p-2.5 text-center">Estado</th><th class="p-2.5 text-center">Doc</th></tr></thead>
+                    <tbody>
+                        ${facturas.map(f => `<tr class="border-t">
+                            <td class="p-2.5 font-bold">${f.numero}</td>
+                            <td class="p-2.5">${fechaLocal(f.fecha)}</td>
+                            <td class="p-2.5 text-right font-bold">${formatEur(f.total)}</td>
+                            <td class="p-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${f.estado==='cobrado'?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-800'}">${f.estado.toUpperCase()}</span></td>
+                            <td class="p-2.5 text-center"><button onclick="generarFacturaPDF(${f.id})" class="text-blue-600 font-bold"><i class="fa-solid fa-file-pdf"></i></button></td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>` : '<p class="text-xs text-slate-400 border rounded-xl p-4 text-center">Este cliente todavía no tiene facturas emitidas.</p>'}
+        </div>
+    `;
+
+    document.getElementById('ficha-cli-editar').onclick = () => { cerrarFichaCliente(); editarCliente(c.id); };
+    document.getElementById('ficha-cli-facturar').onclick = () => {
+        cerrarFichaCliente();
+        openIngresoModal();
+        document.getElementById('ing-cliente').value = String(c.id);
+    };
+
+    const modal = document.getElementById('modal-ficha-cliente');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function cerrarFichaCliente() {
+    const modal = document.getElementById('modal-ficha-cliente');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
 }
 
 function nuevoClienteDesdeFactura() { volverAFactura = true; openClienteModal(); }
-function openClienteModal() {
+function editarCliente(id) { openClienteModal(id); }
+
+function openClienteModal(id = null) {
     document.getElementById('form-cliente').reset();
-    const m = document.getElementById('modal-cliente'); m.classList.remove('hidden'); m.classList.add('flex');
+    document.getElementById('cli-id').value = '';
+    const feedback = document.getElementById('cli-nif-feedback');
+    if (feedback) feedback.classList.add('hidden');
+    document.getElementById('cli-nif').classList.remove('border-emerald-500', 'border-rose-500');
+
+    if (id !== null) {
+        const c = state.clientes.find(x => String(x.id) === String(id));
+        if (!c) return;
+        document.getElementById('cliente-modal-titulo').textContent = `Editar cliente · ${c.nombre}`;
+        document.getElementById('cli-btn-guardar').textContent = 'Guardar cambios';
+        document.getElementById('cli-id').value = String(c.id);
+        document.getElementById('cli-nombre').value = c.nombre || '';
+        document.getElementById('cli-nif').value = c.nif || '';
+        document.getElementById('cli-telefono').value = c.telefono || '';
+        document.getElementById('cli-email').value = c.email || '';
+        document.getElementById('cli-cp').value = c.cp || '';
+        document.getElementById('cli-direccion').value = c.direccion || '';
+        document.getElementById('cli-poblacion').value = c.poblacion || '';
+        document.getElementById('cli-provincia').value = c.provincia || '';
+        document.getElementById('cli-notas').value = c.notas || '';
+    } else {
+        document.getElementById('cliente-modal-titulo').textContent = 'Nuevo cliente';
+        document.getElementById('cli-btn-guardar').textContent = 'Guardar cliente';
+    }
+
+    const m = document.getElementById('modal-cliente');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
 }
+
 function closeClienteModal() {
-    const m = document.getElementById('modal-cliente'); m.classList.add('hidden'); m.classList.remove('flex');
+    const m = document.getElementById('modal-cliente');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
 }
+
 function saveCliente(e) {
     e.preventDefault();
+    const idEdicion = document.getElementById('cli-id').value;
     const nifCli = document.getElementById('cli-nif').value.trim().toUpperCase();
     const checkCli = validarDocumentoFiscalES(nifCli);
-    if (!checkCli.valido && !confirm(`Aviso en NIF/CIF del cliente:\n${checkCli.mensaje}\n\n¿Deseas guardar este cliente de todos modos?`)) {
+    if (!checkCli.valido && !confirm(`Aviso en NIF/CIF del cliente:
+${checkCli.mensaje}
+
+¿Deseas guardar este cliente de todos modos?`)) {
         document.getElementById('cli-nif').focus();
         return;
     }
-    const nuevo = {
-        id: Date.now(), nombre: document.getElementById('cli-nombre').value.trim(),
-        nif: document.getElementById('cli-nif').value.trim().toUpperCase(),
-        email: document.getElementById('cli-email').value.trim(), telefono: document.getElementById('cli-telefono').value.trim()
+
+    const duplicado = state.clientes.find(c => String(c.nif || '').toUpperCase() === nifCli && String(c.id) !== String(idEdicion));
+    if (duplicado) {
+        alert(`Ya existe otro cliente registrado con el NIF/CIF ${nifCli}: ${duplicado.nombre}.`);
+        return;
+    }
+
+    const datos = {
+        nombre: document.getElementById('cli-nombre').value.trim(),
+        nif: nifCli,
+        telefono: document.getElementById('cli-telefono').value.trim(),
+        email: document.getElementById('cli-email').value.trim(),
+        cp: document.getElementById('cli-cp').value.trim(),
+        direccion: document.getElementById('cli-direccion').value.trim(),
+        poblacion: document.getElementById('cli-poblacion').value.trim(),
+        provincia: document.getElementById('cli-provincia').value.trim(),
+        notas: document.getElementById('cli-notas').value.trim()
     };
-    state.clientes.push(nuevo);
+
+    let clienteIdFinal;
+    if (idEdicion) {
+        const existente = state.clientes.find(c => String(c.id) === String(idEdicion));
+        if (!existente) return;
+        Object.assign(existente, datos);
+        clienteIdFinal = existente.id;
+
+        // Actualizar también los datos fiscales en facturas pendientes si el cliente aún no las tiene cobradas
+        state.ingresos.forEach(f => {
+            if (String(f.clienteId) === String(clienteIdFinal) && f.estado === 'pendiente') {
+                f.cliente = datos.nombre;
+                f.nif = datos.nif;
+                f.clienteDireccion = [datos.direccion, [datos.cp, datos.poblacion, datos.provincia].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+            }
+        });
+    } else {
+        clienteIdFinal = Date.now();
+        state.clientes.push({ id: clienteIdFinal, ...datos });
+    }
+
     closeClienteModal();
     saveStorage();
+
     if (volverAFactura) {
         volverAFactura = false;
         openIngresoModal();
-        document.getElementById('ing-cliente').value = String(nuevo.id);
+        document.getElementById('ing-cliente').value = String(clienteIdFinal);
     }
 }
-function eliminarCliente(id) { state.clientes = state.clientes.filter(c => c.id !== id); saveStorage(); }
+
+function eliminarCliente(id) {
+    const cli = state.clientes.find(c => String(c.id) === String(id));
+    if (!cli) return;
+    const numFacturas = state.ingresos.filter(i => String(i.clienteId) === String(id)).length;
+    if (numFacturas > 0) {
+        alert(`No puedes eliminar a "${cli.nombre}" porque tiene ${numFacturas} factura(s) asociada(s). Puedes editar sus datos para conservar la integridad contable.`);
+        return;
+    }
+    if (!confirm(`¿Eliminar el cliente "${cli.nombre}" del directorio?`)) return;
+    state.clientes = state.clientes.filter(c => String(c.id) !== String(id));
+    saveStorage();
+}
 
 function abrirModalPresupuesto() {
     document.getElementById('pres-numero').value = `P-2026-${String(state.presupuestos.length + 1).padStart(4, '0')}`;
@@ -1533,6 +1743,9 @@ Object.assign(window, {
     openClienteModal,
     closeClienteModal,
     saveCliente,
+    editarCliente,
+    verFichaCliente,
+    cerrarFichaCliente,
     eliminarCliente,
     nuevoClienteDesdeFactura,
     renderClientes,
