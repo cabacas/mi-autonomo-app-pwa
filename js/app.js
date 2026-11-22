@@ -163,6 +163,22 @@ function actualizarTextoTributacion() {
     `;
 }
 
+
+function continuarSinEpigrafe() {
+    const nombreInput = document.getElementById('onb-nombre')?.value.trim();
+    const ciudadInput = document.getElementById('onb-ciudad')?.value.trim();
+    if (nombreInput) state.perfil.nombre = nombreInput;
+    if (ciudadInput) state.perfil.ciudad = ciudadInput;
+    state.perfil.iaeCodigo = 'GEN';
+    state.perfil.iae = 'Régimen General (Estimación Directa Simplificada)';
+    state.perfil.ivaDefecto = 21;
+    state.perfil.retencionDefecto = 0;
+    state.perfil.modelosFiscales = '303, 130';
+    state.perfil.onboardingCompletado = true;
+    cerrarOnboarding();
+    saveStorage();
+}
+
 function guardarOnboarding(e) {
     e.preventDefault();
     if (!iaeSeleccionadoOnboarding) { alert('Selecciona un epígrafe de la lista.'); return; }
@@ -705,10 +721,17 @@ function saveIngreso(e) {
     const t = actualizarTotalesFactura();
     const estado = document.getElementById('ing-estado').value;
     const fecha = document.getElementById('ing-fecha').value;
+    const lineasCapturadas = [...document.querySelectorAll('#ing-lineas [data-linea]')].map(el => ({
+        descripcion: el.querySelector('[data-campo="desc"]').value.trim(),
+        cantidad: Number(el.querySelector('[data-campo="cant"]').value) || 1,
+        precio: Number(el.querySelector('[data-campo="precio"]').value) || 0,
+        iva: Number(el.querySelector('[data-campo="iva"]').value) || 0
+    }));
     state.ingresos.push({
         id: Date.now(), numero: document.getElementById('ing-numero').value, fecha,
-        clienteId: c.id, cliente: c.nombre, nif: c.nif,
+        clienteId: c.id, cliente: c.nombre, nif: c.nif, clienteDireccion: c.direccion || '',
         trimestre: parseInt(document.getElementById('ing-trimestre').value),
+        lineas: lineasCapturadas,
         base: t.base, iva: t.iva, retencion: t.ret, retencionPct: t.irpfPct, total: t.total, estado,
         movimientosPago: estado === 'cobrado' ? [{ id: Date.now(), fecha, importe: t.total }] : []
     });
@@ -724,16 +747,26 @@ function deleteIngreso(id) {
 
 function renderClientes() {
     const q = (document.getElementById('clientes-busqueda')?.value || '').toLowerCase();
-    const filtrados = state.clientes.filter(c => c.nombre.toLowerCase().includes(q) || c.nif.toLowerCase().includes(q));
+    const filtrados = state.clientes.filter(c => c.nombre.toLowerCase().includes(q) || c.nif.toLowerCase().includes(q) || (c.telefono || '').includes(q));
     document.getElementById('clientes-contador').textContent = `${filtrados.length} clientes`;
-    document.getElementById('tabla-clientes-body').innerHTML = filtrados.map(c => `
+    document.getElementById('tabla-clientes-body').innerHTML = filtrados.map(c => {
+        const telLimpio = String(c.telefono || '').replace(/[^+\d]/g, '');
+        const enlaceTel = telLimpio
+            ? `<a href="tel:${telLimpio}" class="inline-flex items-center gap-1.5 font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition"><i class="fa-solid fa-phone text-[11px]"></i> ${c.telefono}</a>`
+            : '<span class="text-slate-400">Sin teléfono</span>';
+        const enlaceMail = c.email
+            ? `<a href="mailto:${c.email}" class="text-blue-600 hover:underline block mt-0.5">${c.email}</a>`
+            : '';
+
+        return `
         <tr class="border-b hover:bg-slate-50">
-            <td class="p-3 font-bold">${c.nombre}</td><td class="p-3">${c.nif}</td>
-            <td class="p-3 text-xs">${c.email || '-'} · ${c.telefono || ''}</td>
+            <td class="p-3 font-bold text-slate-900">${c.nombre}</td>
+            <td class="p-3 font-mono text-xs">${c.nif}</td>
+            <td class="p-3 text-xs">${enlaceTel}${enlaceMail}</td>
             <td class="p-3 text-center font-bold text-blue-700">${state.ingresos.filter(i => i.clienteId === c.id).length}</td>
-            <td class="p-3 text-center"><button onclick="eliminarCliente(${c.id})" class="text-rose-600"><i class="fa-solid fa-trash"></i></button></td>
-        </tr>
-    `).join('');
+            <td class="p-3 text-center"><button onclick="eliminarCliente(${c.id})" class="text-rose-600 hover:text-rose-800 p-1.5" title="Eliminar"><i class="fa-solid fa-trash"></i></button></td>
+        </tr>`;
+    }).join('');
 }
 
 function nuevoClienteDesdeFactura() { volverAFactura = true; openClienteModal(); }
@@ -878,8 +911,152 @@ function descargarImpresoPDF() {
 function generarFacturaPDF(id) {
     const f = state.ingresos.find(x => x.id === id);
     if (!f) return;
+    const cli = state.clientes.find(c => String(c.id) === String(f.clienteId)) || {};
+    const lineas = Array.isArray(f.lineas) && f.lineas.length
+        ? f.lineas
+        : [{ descripcion: 'Prestación de servicios profesionales / actividad económica', cantidad: 1, precio: f.base, iva: f.base > 0 ? Math.round((f.iva / f.base) * 100) : 21 }];
+
+    // Desglose de IVA por tipos (requisito Art. 6.1.h RD 1619/2012)
+    const desgloseIva = {};
+    lineas.forEach(l => {
+        const sub = (Number(l.cantidad) || 1) * (Number(l.precio) || 0);
+        const tipo = Number(l.iva) || 0;
+        if (!desgloseIva[tipo]) desgloseIva[tipo] = { base: 0, cuota: 0 };
+        desgloseIva[tipo].base += sub;
+        desgloseIva[tipo].cuota += sub * tipo / 100;
+    });
+
+    const filasConceptos = lineas.map(l => {
+        const sub = (Number(l.cantidad) || 1) * (Number(l.precio) || 0);
+        return `<tr>
+            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;">${l.descripcion}</td>
+            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${Number(l.cantidad).toLocaleString('es-ES')}</td>
+            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${formatEur(l.precio)}</td>
+            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${l.iva}%</td>
+            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:bold;">${formatEur(sub)}</td>
+        </tr>`;
+    }).join('');
+
+    const filasDesglose = Object.entries(desgloseIva).map(([tipo, vals]) => `
+        <tr>
+            <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;">${formatEur(vals.base)}</td>
+            <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;">${tipo}%</td>
+            <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${formatEur(vals.cuota)}</td>
+        </tr>
+    `).join('');
+
     const w = window.open('', '_blank');
-    w.document.write(`<html><body style="font-family:Arial;padding:30px"><h2>FACTURA ${f.numero}</h2><p>Emisor: ${state.perfil.nombre} (${state.perfil.nif})</p><p>Cliente: ${f.cliente} (${f.nif})</p><hr><p>Base Imponible: ${formatEur(f.base)}</p><p>IVA: ${formatEur(f.iva)}</p><p>Retención IRPF: -${formatEur(f.retencion || 0)}</p><h3>TOTAL: ${formatEur(f.total)}</h3><script>window.print()<\/script></body></html>`);
+    if (!w) { alert('Permite las ventanas emergentes para visualizar e imprimir la factura.'); return; }
+
+    w.document.write(`<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Factura ${f.numero}</title>
+<style>
+    @page { size: A4; margin: 16mm; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #0f172a; font-size: 11px; line-height: 1.45; margin: 0; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1e3a8a; padding-bottom: 16px; margin-bottom: 22px; }
+    .title { font-size: 26px; font-weight: 900; color: #1e3a8a; letter-spacing: 0.5px; margin: 0; }
+    .meta { text-align: right; font-size: 11px; }
+    .meta p { margin: 2px 0; }
+    .parties { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+    .box { width: 48%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; }
+    .box-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; margin-bottom: 6px; }
+    .box h3 { margin: 0 0 4px 0; font-size: 13px; color: #0f172a; }
+    .box p { margin: 2px 0; color: #334155; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th { background: #1e3a8a; color: white; font-size: 10px; text-transform: uppercase; padding: 8px; text-align: left; }
+    .bottom-grid { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-top: 10px; }
+    .tax-table { width: 45%; font-size: 10px; }
+    .tax-table th { background: #e2e8f0; color: #1e293b; }
+    .totals { width: 45%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; }
+    .tot-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
+    .tot-final { display: flex; justify-content: space-between; border-top: 2px solid #1e3a8a; margin-top: 8px; padding-top: 8px; font-size: 16px; font-weight: 900; color: #1e3a8a; }
+    .payment-box { margin-top: 24px; padding: 10px 12px; border-left: 4px solid #0284c7; background: #f0f9ff; font-size: 10.5px; }
+    .legal-footer { margin-top: 36px; padding-top: 10px; border-top: 1px solid #cbd5e1; font-size: 9px; color: #64748b; text-align: center; }
+    @media print { body { padding: 0; } .no-print { display: none; } }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div>
+            <h1 class="title">FACTURA</h1>
+            <p style="margin:4px 0 0 0;font-weight:bold;font-size:13px;">Serie / Número: ${f.numero}</p>
+        </div>
+        <div class="meta">
+            <p><strong>Fecha de expedición:</strong> ${fechaLocal(f.fecha)}</p>
+            <p><strong>Fecha de operación:</strong> ${fechaLocal(f.fecha)}</p>
+            <p><strong>Trimestre fiscal:</strong> ${f.trimestre}T / 2026</p>
+            <p><strong>Estado:</strong> ${f.estado.toUpperCase()}</p>
+        </div>
+    </div>
+
+    <div class="parties">
+        <div class="box">
+            <div class="box-label">Datos del Expedidor (Emisor)</div>
+            <h3>${state.perfil.nombre || 'Autónomo'}</h3>
+            <p><strong>NIF / NIE:</strong> ${state.perfil.nif || '—'}</p>
+            <p><strong>Domicilio Fiscal:</strong> ${state.perfil.direccion || state.perfil.ciudad || '—'}</p>
+            <p><strong>Teléfono:</strong> ${state.perfil.telefono || '—'}</p>
+            <p><strong>Epígrafe IAE:</strong> ${state.perfil.iaeCodigo || 'Régimen General'}</p>
+        </div>
+        <div class="box">
+            <div class="box-label">Datos del Destinatario (Cliente)</div>
+            <h3>${cli.nombre || f.cliente}</h3>
+            <p><strong>NIF / CIF:</strong> ${cli.nif || f.nif || '—'}</p>
+            <p><strong>Domicilio:</strong> ${cli.direccion || f.clienteDireccion || '—'}</p>
+            <p><strong>Contacto:</strong> ${cli.telefono || ''} ${cli.email ? '· ' + cli.email : ''}</p>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Descripción de las operaciones</th>
+                <th style="text-align:right;">Cantidad</th>
+                <th style="text-align:right;">Precio Unit.</th>
+                <th style="text-align:right;">Tipo IVA</th>
+                <th style="text-align:right;">Base Imponible</th>
+            </tr>
+        </thead>
+        <tbody>${filasConceptos}</tbody>
+    </table>
+
+    <div class="bottom-grid">
+        <table class="tax-table">
+            <thead>
+                <tr>
+                    <th>Base Imponible</th>
+                    <th>% IVA</th>
+                    <th style="text-align:right;">Cuota IVA</th>
+                </tr>
+            </thead>
+            <tbody>${filasDesglose}</tbody>
+        </table>
+
+        <div class="totals">
+            <div class="tot-row"><span>Total Base Imponible:</span><strong>${formatEur(f.base)}</strong></div>
+            <div class="tot-row"><span>Total Cuota IVA:</span><strong>${formatEur(f.iva)}</strong></div>
+            ${Number(f.retencion) > 0 ? `<div class="tot-row" style="color:#be123c;"><span>Retención IRPF (${f.retencionPct || 15}%):</span><strong>-${formatEur(f.retencion)}</strong></div>` : ''}
+            <div class="tot-final"><span>TOTAL FACTURA:</span><span>${formatEur(f.total)}</span></div>
+        </div>
+    </div>
+
+    <div class="payment-box">
+        <strong>Forma de pago:</strong> Transferencia bancaria &nbsp;|&nbsp; <strong>Cuenta IBAN:</strong> <span style="font-family:monospace;">${state.perfil.iban || 'Consultar con el emisor'}</span>
+    </div>
+
+    <div class="legal-footer">
+        Factura expedida conforme al Real Decreto 1619/2012, de 30 de noviembre, por el que se aprueba el Reglamento por el que se regulan las obligaciones de facturación (Agencia Estatal de Administración Tributaria).
+    </div>
+</div>
+<script>window.onload = function() { setTimeout(function(){ window.print(); }, 250); };<\/script>
+</body>
+</html>`);
     w.document.close();
 }
 
@@ -913,6 +1090,7 @@ Object.assign(window, {
     seleccionarIAE,
     actualizarTextoTributacion,
     guardarOnboarding,
+    continuarSinEpigrafe,
     openCompraModal,
     iniciarEscaneoDocumento,
     manejarArchivoOCR,
