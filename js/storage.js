@@ -109,6 +109,90 @@ export async function contarAdjuntosIDB() {
     } catch { return 0; }
 }
 
+
+export async function eliminarAdjuntoIDB(id) {
+    if (!id) return;
+    try {
+        const db = await abrirIDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).delete(id);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        });
+    } catch { return false; }
+}
+
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
+
+export async function exportarTodosAdjuntosIDB() {
+    try {
+        const db = await abrirIDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, 'readonly');
+            const req = tx.objectStore(IDB_STORE).getAll();
+            req.onsuccess = () => {
+                const items = req.result || [];
+                const serializados = items.map(item => ({
+                    id: item.id,
+                    nombre: item.nombre,
+                    tipo: item.tipo,
+                    tamano: item.tamano,
+                    fecha: item.fecha,
+                    dataBase64: item.data ? arrayBufferToBase64(item.data) : null
+                }));
+                resolve(serializados);
+            };
+            req.onerror = () => resolve([]);
+        });
+    } catch { return []; }
+}
+
+export async function importarTodosAdjuntosIDB(listaAdjuntos) {
+    if (!Array.isArray(listaAdjuntos) || !listaAdjuntos.length) return 0;
+    try {
+        const db = await abrirIDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            const store = tx.objectStore(IDB_STORE);
+            let count = 0;
+            listaAdjuntos.forEach(item => {
+                if (item && item.id && item.dataBase64) {
+                    store.put({
+                        id: item.id,
+                        nombre: item.nombre,
+                        tipo: item.tipo,
+                        tamano: item.tamano,
+                        fecha: item.fecha,
+                        data: base64ToArrayBuffer(item.dataBase64)
+                    });
+                    count++;
+                }
+            });
+            tx.oncomplete = () => resolve(count);
+            tx.onerror = () => resolve(0);
+        });
+    } catch { return 0; }
+}
+
 export function getDefaultState() {
     return {
         perfil: {
@@ -127,8 +211,8 @@ export function getDefaultState() {
             saldoBanco: 12450.00
         },
         ingresos: [
-            { id: 1, numero: "F-2026-0001", fecha: "2026-01-15", cliente: "Cliente Alpha SL", nif: "B65432109", base: 2500, trimestre: 1, iva: 525, retencion: 375, retencionPct: 15, total: 2650, estado: "cobrado", movimientosPago: [{id:1, fecha:"2026-02-10", importe:2650}] },
-            { id: 2, numero: "F-2026-0002", fecha: "2026-04-10", cliente: "Cliente Beta SA", nif: "A98765432", base: 1800, trimestre: 2, iva: 378, retencion: 270, retencionPct: 15, total: 1908, estado: "pendiente", movimientosPago: [] }
+            { id: 1, numero: "F-2026-0001", fecha: "2026-01-15", clienteId: 101, cliente: "Cliente Alpha SL", nif: "B65432109", base: 2500, trimestre: 1, iva: 525, retencion: 375, retencionPct: 15, total: 2650, estado: "cobrado", movimientosPago: [{id:1, fecha:"2026-02-10", importe:2650}] },
+            { id: 2, numero: "F-2026-0002", fecha: "2026-04-10", clienteId: 102, cliente: "Cliente Beta SA", nif: "A98765432", base: 1800, trimestre: 2, iva: 378, retencion: 270, retencionPct: 15, total: 1908, estado: "pendiente", movimientosPago: [] }
         ],
         clientes: [
             { id: 101, nombre: "Cliente Alpha SL", nif: "B65432109", email: "admin@alpha.es", telefono: "937000001" },

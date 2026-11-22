@@ -5,7 +5,10 @@ import {
     getDefaultState,
     guardarAdjuntoIDB,
     abrirAdjuntoIDB,
-    contarAdjuntosIDB
+    contarAdjuntosIDB,
+    eliminarAdjuntoIDB,
+    exportarTodosAdjuntosIDB,
+    importarTodosAdjuntosIDB
 } from './storage.js';
 
 import {
@@ -30,6 +33,12 @@ import {
 } from './einvoice.js';
 
 let state = getDefaultState();
+state.ejercicioActivo = 2026;
+
+function cambiarEjercicioGlobal(anio) {
+    state.ejercicioActivo = Number(anio) || new Date().getFullYear();
+    saveStorage();
+}
 let iaeSeleccionadoOnboarding = null;
 let volverAFactura = false;
 let archivoEscaneadoActual = null;
@@ -306,7 +315,12 @@ async function renderAll() {
     document.getElementById('nav-autonomo-ciudad').textContent = state.perfil.ciudad || 'España';
     document.getElementById('header-actividad-badge').textContent = state.perfil.iae ? `IAE ${state.perfil.iaeCodigo || ''}` : 'Gestor Fiscal';
     document.getElementById('dash-nombre').textContent = (state.perfil.nombre || 'Autónomo').split(' ')[0];
-    document.getElementById('dash-subtitulo-actividad').textContent = `${state.perfil.ciudad ? state.perfil.ciudad + ' · ' : ''}Ejercicio 2026`;
+    const anioAct = state.ejercicioActivo || 2026;
+    const selEj = document.getElementById('global-ejercicio-select');
+    if (selEj) selEj.value = String(anioAct);
+    const badgeChart = document.getElementById('dash-chart-anio-badge');
+    if (badgeChart) badgeChart.textContent = String(anioAct);
+    document.getElementById('dash-subtitulo-actividad').textContent = `${state.perfil.ciudad ? state.perfil.ciudad + ' · ' : ''}Ejercicio`;
     document.getElementById('dash-iae-titulo').textContent = state.perfil.iae || 'Actividad no configurada';
     document.getElementById('dash-iae-detalle').textContent = `IVA ${state.perfil.ivaDefecto ?? 21}% · Retención IRPF: ${state.perfil.retencionDefecto ?? 0}% · Modelos: ${state.perfil.modelosFiscales || '303, 130'}`;
 
@@ -340,46 +354,53 @@ function renderIngresos() {
     cardsMobile.innerHTML = '';
 
     state.ingresos.slice().reverse().forEach(i => {
-        const pend = importePendiente(i);
-        const badgeClass = i.estado === 'cobrado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
+        const esRect = i.tipoDocumento === 'rectificativa';
+        const pend = esRect ? 0 : importePendiente(i);
+        const badgeClass = esRect
+            ? 'bg-rose-100 text-rose-800'
+            : (i.estado === 'cobrado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800');
+        const estadoTexto = esRect ? 'RECTIFICATIVA' : i.estado.toUpperCase();
 
         tbody.innerHTML += `
-            <tr class="border-b hover:bg-slate-50">
-                <td class="px-3 py-2.5 font-bold">${i.numero}</td>
+            <tr class="border-b hover:bg-slate-50 ${esRect ? 'bg-rose-50/40' : ''}">
+                <td class="px-3 py-2.5 font-bold">${i.numero}${i.facturaRectificadaNumero ? `<div class="text-[10px] text-rose-600">Rectifica a ${i.facturaRectificadaNumero}</div>` : ''}</td>
                 <td class="px-3 py-2.5">${fechaLocal(i.fecha)}</td>
                 <td class="px-3 py-2.5 font-semibold text-slate-800">${i.cliente}</td>
                 <td class="px-3 py-2.5 text-center"><span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold text-xs">${i.trimestre}T</span></td>
                 <td class="px-3 py-2.5 text-right">${formatEur(i.base)}</td>
                 <td class="px-3 py-2.5 text-right">${formatEur(i.iva)}</td>
-                <td class="px-3 py-2.5 text-right text-rose-600">-${formatEur(i.retencion || 0)}</td>
-                <td class="px-3 py-2.5 text-right font-extrabold text-slate-900">${formatEur(i.total)}</td>
-                <td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${badgeClass}">${i.estado.toUpperCase()}</span></td>
+                <td class="px-3 py-2.5 text-right text-rose-600">${Number(i.retencion) !== 0 ? formatEur(-Math.abs(i.retencion)) : '0,00 €'}</td>
+                <td class="px-3 py-2.5 text-right font-extrabold ${esRect ? 'text-rose-700' : 'text-slate-900'}">${formatEur(i.total)}</td>
+                <td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${estadoTexto}</span></td>
                 <td class="px-3 py-2.5 text-center whitespace-nowrap">
-                    ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="text-emerald-600 px-1.5" title="Cobrar"><i class="fa-solid fa-check-circle"></i></button>` : ''}
+                    ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="text-emerald-600 px-1.5" title="Marcar cobrada"><i class="fa-solid fa-check-circle"></i></button>` : ''}
                     <button onclick="generarFacturaPDF(${i.id})" class="text-blue-600 hover:text-blue-800 px-1.5" title="Factura PDF + QR"><i class="fa-solid fa-file-pdf"></i></button>
-                    <button onclick="exportarFacturaXML(${i.id})" class="text-indigo-600 hover:text-indigo-800 px-1.5 font-bold text-[11px]" title="Descargar XML Facturae 3.2.2">XML</button>
-                    <button onclick="deleteIngreso(${i.id})" class="text-rose-600 px-1.5"><i class="fa-solid fa-trash"></i></button>
+                    <button onclick="exportarFacturaXML(${i.id})" class="text-indigo-600 hover:text-indigo-800 px-1.5 font-bold text-[11px]" title="XML Facturae 3.2.2">XML</button>
+                    ${!esRect ? `<button onclick="emitirRectificativa(${i.id})" class="text-rose-600 hover:text-rose-800 px-1.5" title="Emitir Factura Rectificativa (Veri*factu)"><i class="fa-solid fa-file-circle-minus"></i></button>` : ''}
                 </td>
             </tr>`;
 
         cardsMobile.innerHTML += `
-            <article class="app-card p-4 space-y-2.5">
+            <article class="app-card p-4 space-y-2.5 ${esRect ? 'border-l-4 border-rose-500' : ''}">
                 <div class="flex justify-between items-start gap-2">
-                    <div><span class="text-xs font-extrabold text-blue-700">${i.numero}</span><h4 class="font-bold text-slate-900 text-base">${i.cliente}</h4></div>
-                    <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold ${badgeClass}">${i.estado.toUpperCase()}</span>
+                    <div>
+                        <span class="text-xs font-extrabold text-blue-700">${i.numero}</span>
+                        <h4 class="font-bold text-slate-900 text-base">${i.cliente}</h4>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold ${badgeClass}">${estadoTexto}</span>
                 </div>
                 <div class="flex justify-between items-end pt-1">
                     <div class="text-xs text-slate-500">
                         <p>${fechaLocal(i.fecha)} · ${i.trimestre}T</p>
                         <p>Base: ${formatEur(i.base)} · IVA: ${formatEur(i.iva)}</p>
                     </div>
-                    <p class="text-xl font-black text-slate-900">${formatEur(i.total)}</p>
+                    <p class="text-xl font-black ${esRect ? 'text-rose-700' : 'text-slate-900'}">${formatEur(i.total)}</p>
                 </div>
                 <div class="flex gap-2 pt-2 border-t">
                     ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold"><i class="fa-solid fa-check mr-1"></i>Cobrar</button>` : ''}
                     <button onclick="generarFacturaPDF(${i.id})" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>
-                    <button onclick="exportarFacturaXML(${i.id})" class="flex-1 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold"><i class="fa-solid fa-code mr-1"></i>Facturae XML</button>
-                    <button onclick="deleteIngreso(${i.id})" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold"><i class="fa-solid fa-trash"></i></button>
+                    <button onclick="exportarFacturaXML(${i.id})" class="flex-1 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold"><i class="fa-solid fa-code mr-1"></i>XML</button>
+                    ${!esRect ? `<button onclick="emitirRectificativa(${i.id})" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold" title="Rectificativa"><i class="fa-solid fa-file-circle-minus"></i></button>` : ''}
                 </div>
             </article>`;
     });
@@ -431,8 +452,9 @@ function renderComprasSeparadas() {
                 <td class="px-3 py-2.5 text-center">${btnAdj}</td>
                 <td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${g.estado.toUpperCase()}</span></td>
                 <td class="px-3 py-2.5 text-center whitespace-nowrap">
-                    ${g.estado !== 'pagado' ? `<button onclick="marcarPagadoRapido(${g.id})" class="text-emerald-600 px-1.5"><i class="fa-solid fa-check-circle"></i></button>` : ''}
-                    <button onclick="deleteGasto(${g.id})" class="text-rose-600 px-1.5"><i class="fa-solid fa-trash"></i></button>
+                    ${g.estado !== 'pagado' ? `<button onclick="marcarPagadoRapido(${g.id})" class="text-emerald-600 px-1.5" title="Marcar pagado"><i class="fa-solid fa-check-circle"></i></button>` : ''}
+                    <button onclick="editarCompra(${g.id})" class="text-amber-600 hover:text-amber-800 px-1.5" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="deleteGasto(${g.id})" class="text-rose-600 px-1.5" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
                 </td>
             </tr>`;
 
@@ -455,6 +477,7 @@ function renderComprasSeparadas() {
                 <div class="flex gap-2 pt-2 border-t">
                     ${g.estado !== 'pagado' ? `<button onclick="marcarPagadoRapido(${g.id})" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold">Pagar</button>` : ''}
                     ${g.adjuntoId ? `<button onclick="abrirAdjuntoIDB('${g.adjuntoId}')" class="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold"><i class="fa-solid fa-paperclip mr-1"></i>Doc</button>` : ''}
+                    <button onclick="editarCompra(${g.id})" class="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-xs font-bold"><i class="fa-solid fa-pen"></i></button>
                     <button onclick="deleteGasto(${g.id})" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold ml-auto"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </article>`;
@@ -479,8 +502,9 @@ function renderComprasSeparadas() {
                 <td class="px-3 py-2.5 text-center">${btnAdj}</td>
                 <td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${g.estado.toUpperCase()}</span></td>
                 <td class="px-3 py-2.5 text-center whitespace-nowrap">
-                    ${g.estado !== 'pagado' ? `<button onclick="marcarPagadoRapido(${g.id})" class="text-emerald-600 px-1.5"><i class="fa-solid fa-check-circle"></i></button>` : ''}
-                    <button onclick="deleteGasto(${g.id})" class="text-rose-600 px-1.5"><i class="fa-solid fa-trash"></i></button>
+                    ${g.estado !== 'pagado' ? `<button onclick="marcarPagadoRapido(${g.id})" class="text-emerald-600 px-1.5" title="Marcar pagado"><i class="fa-solid fa-check-circle"></i></button>` : ''}
+                    <button onclick="editarCompra(${g.id})" class="text-amber-600 hover:text-amber-800 px-1.5" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="deleteGasto(${g.id})" class="text-rose-600 px-1.5" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
                 </td>
             </tr>`;
 
@@ -500,6 +524,7 @@ function renderComprasSeparadas() {
                 <div class="flex gap-2 pt-2 border-t">
                     ${g.estado !== 'pagado' ? `<button onclick="marcarPagadoRapido(${g.id})" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold">Pagar</button>` : ''}
                     ${g.adjuntoId ? `<button onclick="abrirAdjuntoIDB('${g.adjuntoId}')" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold"><i class="fa-solid fa-paperclip mr-1"></i>Doc</button>` : ''}
+                    <button onclick="editarCompra(${g.id})" class="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-xs font-bold"><i class="fa-solid fa-pen"></i></button>
                     <button onclick="deleteGasto(${g.id})" class="px-3 py-2 rounded-xl bg-slate-100 text-rose-600 text-xs font-bold ml-auto"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </article>`;
@@ -515,9 +540,34 @@ function marcarPagadoRapido(id) {
 }
 
 /* ================= MODALES COMPRA / GASTO / INGRESO / CLIENTE / PRESUPUESTO ================= */
+function editarCompra(id) {
+    const item = state.gastos.find(g => String(g.id) === String(id));
+    if (!item) return;
+    const tipo = item.tipo === 'gasto' ? 'gasto' : 'factura';
+    openCompraModal(tipo, false);
+    document.getElementById('comp-id-edicion').value = String(item.id);
+    document.getElementById('comp-modal-titulo').textContent = tipo === 'factura' ? 'Editar Factura Recibida' : 'Editar Gasto o Ticket';
+    document.getElementById('comp-fecha').value = item.fecha || '';
+    document.getElementById('comp-trimestre').value = String(item.trimestre || 1);
+    document.getElementById('comp-proveedor').value = item.proveedor || '';
+    document.getElementById('comp-categoria').value = item.cat || CATEGORIAS_COMPRAS[0];
+    document.getElementById('comp-estado').value = item.estado || 'pagado';
+
+    if (tipo === 'factura') {
+        document.getElementById('comp-num-factura').value = item.numFactura || '';
+        document.getElementById('comp-nif-proveedor').value = item.nifProveedor || '';
+        document.getElementById('comp-base').value = Number(item.baseIva || 0).toFixed(2);
+        document.getElementById('comp-iva-pct').value = String(item.ivaPct ?? 21);
+    } else {
+        document.getElementById('comp-total-simple').value = Number(item.baseIrpf || item.total || 0).toFixed(2);
+    }
+    actualizarResumenCompra();
+}
+
 function openCompraModal(tipo = 'factura', mantenerArchivoOCR = false) {
     const esFactura = tipo === 'factura';
     const hoy = new Date().toISOString().slice(0, 10);
+    document.getElementById('comp-id-edicion').value = '';
     document.getElementById('comp-tipo').value = tipo;
     document.getElementById('comp-fecha').value = hoy;
     document.getElementById('comp-num-factura').value = '';
@@ -526,6 +576,8 @@ function openCompraModal(tipo = 'factura', mantenerArchivoOCR = false) {
     document.getElementById('comp-base').value = '';
     document.getElementById('comp-total-simple').value = '';
     document.getElementById('comp-archivo').value = '';
+    const fb = document.getElementById('comp-nif-feedback');
+    if (fb) fb.classList.add('hidden');
     if (!mantenerArchivoOCR) {
         archivoEscaneadoActual = null;
         document.getElementById('comp-ocr-status')?.classList.add('hidden');
@@ -564,6 +616,9 @@ function actualizarResumenCompra() {
 
 async function saveCompra(e) {
     e.preventDefault();
+    const idEdicion = document.getElementById('comp-id-edicion').value;
+    const existente = idEdicion ? state.gastos.find(g => String(g.id) === String(idEdicion)) : null;
+
     const tipo = document.getElementById('comp-tipo').value;
     const fecha = document.getElementById('comp-fecha').value;
     const trimestre = parseInt(document.getElementById('comp-trimestre').value);
@@ -579,7 +634,10 @@ async function saveCompra(e) {
         nifProveedor = document.getElementById('comp-nif-proveedor').value.trim().toUpperCase();
         if (nifProveedor) {
             const checkProv = validarDocumentoFiscalES(nifProveedor);
-            if (!checkProv.valido && !confirm(`Aviso en NIF/CIF del proveedor:\n${checkProv.mensaje}\n\n¿Guardar factura igualmente?`)) {
+            if (!checkProv.valido && !confirm(`Aviso en NIF/CIF del proveedor:
+${checkProv.mensaje}
+
+¿Guardar factura igualmente?`)) {
                 document.getElementById('comp-nif-proveedor').focus();
                 return;
             }
@@ -594,45 +652,62 @@ async function saveCompra(e) {
         baseIrpf = total;
     }
 
-    const id = Date.now();
+    const id = existente ? existente.id : Date.now();
     const fileInput = document.getElementById('comp-archivo');
     const archivoFinal = (fileInput.files && fileInput.files[0]) ? fileInput.files[0] : archivoEscaneadoActual;
-    let adjuntoId = null, adjuntoNombre = '';
+    let adjuntoId = existente?.adjuntoId || null;
+    let adjuntoNombre = existente?.adjuntoNombre || '';
+
     if (archivoFinal) {
+        if (adjuntoId) await eliminarAdjuntoIDB(adjuntoId);
         adjuntoId = `adj-${id}`;
         adjuntoNombre = archivoFinal.name;
         await guardarAdjuntoIDB(adjuntoId, archivoFinal);
     }
     archivoEscaneadoActual = null;
 
-    state.gastos.push({
+    const datos = {
         id, tipo, numFactura, nifProveedor, fecha, trimestre, proveedor, cat,
         baseIva, baseIrpf, ivaPct, iva, total, estado,
         adjuntoId, adjuntoNombre,
         movimientosPago: estado === 'pagado' ? [{ id, fecha, importe: total }] : []
-    });
+    };
+
+    if (existente) {
+        Object.assign(existente, datos);
+    } else {
+        state.gastos.push(datos);
+    }
 
     closeCompraModal();
     saveStorage();
 }
 
-function deleteGasto(id) {
-    if (!confirm('¿Eliminar este registro?')) return;
-    state.gastos = state.gastos.filter(g => g.id !== id);
+async function deleteGasto(id) {
+    const item = state.gastos.find(g => String(g.id) === String(id));
+    if (!item) return;
+    if (!confirm(`¿Eliminar "${item.proveedor}" por ${formatEur(item.total)}?`)) return;
+    if (item.adjuntoId) {
+        await eliminarAdjuntoIDB(item.adjuntoId);
+    }
+    state.gastos = state.gastos.filter(g => String(g.id) !== String(id));
     saveStorage();
 }
 
 function actualizarKPIs() {
-    const totBaseIng = state.ingresos.reduce((s, i) => s + i.base, 0);
-    const totIvaIng = state.ingresos.reduce((s, i) => s + i.iva, 0);
-    const totBaseCompras = state.gastos.reduce((s, g) => s + g.baseIrpf, 0);
-    const totIvaDeducible = state.gastos.filter(g => g.tipo !== 'gasto').reduce((s, g) => s + g.iva, 0);
+    const anioAct = String(state.ejercicioActivo || 2026);
+    const ingAnio = state.ingresos.filter(i => String(i.fecha || '').startsWith(anioAct));
+    const gasAnio = state.gastos.filter(g => String(g.fecha || '').startsWith(anioAct));
+    const totBaseIng = ingAnio.reduce((s, i) => s + i.base, 0);
+    const totIvaIng = ingAnio.reduce((s, i) => s + i.iva, 0);
+    const totBaseCompras = gasAnio.reduce((s, g) => s + g.baseIrpf, 0);
+    const totIvaDeducible = gasAnio.filter(g => g.tipo !== 'gasto').reduce((s, g) => s + g.iva, 0);
 
     const cobrosPend = state.ingresos.reduce((s, i) => s + importePendiente(i), 0);
     const pagosPend = state.gastos.reduce((s, g) => s + importePendiente(g), 0);
 
     const ivaLiq = totIvaIng - totIvaDeducible;
-    const q4 = calculateQuarter(state, 4);
+    const q4 = calculateQuarter(state, 4, anioAct);
     const reservaHacienda = Math.max(0, ivaLiq) + q4.irpf130APagar;
     const saldoBanco = obtenerSaldoBancoActual(state);
     const posNeta = saldoBanco + cobrosPend - pagosPend - reservaHacienda;
@@ -660,7 +735,7 @@ function actualizarKPIs() {
 function renderTrimestres() {
     const cont = document.getElementById('cards-trimestres');
     cont.innerHTML = [1, 2, 3, 4].map(q => {
-        const d = calculateQuarter(state, q);
+        const d = calculateQuarter(state, q, state.ejercicioActivo || 2026);
         return `<div class="border rounded-xl p-4 bg-slate-50 space-y-2">
             <h4 class="font-extrabold text-slate-800 border-b pb-2">${q}º TRIMESTRE</h4>
             <div class="text-xs space-y-1.5">
@@ -669,7 +744,8 @@ function renderTrimestres() {
                 <p class="flex justify-between text-amber-700 font-bold border-t pt-1"><span>Mod. 303 (IVA Trim.):</span><span>${formatEur(d.ivaLiquidacion)}</span></p>
                 <div class="bg-blue-50/80 p-2 rounded-lg space-y-1 mt-1">
                     <p class="text-[10px] font-bold uppercase text-blue-800">Modelo 130 (Acumulado 1T-${q}T)</p>
-                    <p class="flex justify-between text-[11px]"><span>Rend. Neto Acum.:</span><span>${formatEur(d.rendNetoAcum)}</span></p>
+                    <p class="flex justify-between text-[11px]"><span>Gastos Dif. Just. (5%):</span><span>-${formatEur(d.gastosDificilJustificacion)}</span></p>
+                    <p class="flex justify-between text-[11px]"><span>Rend. Neto Reducido:</span><span>${formatEur(d.rendNetoAcum)}</span></p>
                     <p class="flex justify-between text-[11px]"><span>20% Cuota - Retenc.:</span><span>-${formatEur(d.retencionesAcum)}</span></p>
                     <p class="flex justify-between text-blue-700 font-extrabold"><span>A ingresar Mod. 130:</span><span>${formatEur(d.irpf130APagar)}</span></p>
                 </div>
@@ -763,10 +839,59 @@ async function saveIngreso(e) {
     saveStorage();
 }
 
-function deleteIngreso(id) {
-    if (!confirm('¿Eliminar esta factura?')) return;
-    state.ingresos = state.ingresos.filter(i => i.id !== id);
+async function emitirRectificativa(id) {
+    const orig = state.ingresos.find(i => String(i.id) === String(id));
+    if (!orig) return;
+    if (orig.tipoDocumento === 'rectificativa') {
+        alert('No se puede rectificar una factura rectificativa.');
+        return;
+    }
+    const yaRectificada = state.ingresos.some(i => String(i.facturaRectificadaId) === String(orig.id));
+    if (yaRectificada) {
+        alert(`La factura ${orig.numero} ya tiene una factura rectificativa emitida.`);
+        return;
+    }
+    const motivo = prompt(`INMUTABILIDAD VERI*FACTU (RD 1007/2023)\nLas facturas emitidas no se pueden borrar.\n\nSe emitirá una Factura Rectificativa de abono total para anular la factura ${orig.numero} (${formatEur(orig.total)}).\n\nIndica el motivo de la rectificación:`, 'Anulación por error en facturación');
+    if (!motivo || !motivo.trim()) return;
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    const anio = hoy.slice(0, 4);
+    const numRect = `R-${anio}-${String(state.ingresos.filter(x => x.tipoDocumento === 'rectificativa').length + 1).padStart(4, '0')}`;
+
+    const rectificativa = {
+        id: Date.now(),
+        numero: numRect,
+        fecha: hoy,
+        clienteId: orig.clienteId,
+        cliente: orig.cliente,
+        nif: orig.nif,
+        clienteDireccion: orig.clienteDireccion || '',
+        trimestre: Math.ceil((new Date().getMonth() + 1) / 3),
+        tipoDocumento: 'rectificativa',
+        facturaRectificadaId: orig.id,
+        facturaRectificadaNumero: orig.numero,
+        motivoRectificacion: motivo.trim(),
+        lineas: (orig.lineas || [{ descripcion: 'Abono factura ' + orig.numero, cantidad: 1, precio: orig.base, iva: 21 }]).map(l => ({
+            ...l,
+            descripcion: `[RECTIFICACIÓN ${orig.numero}] ${l.descripcion}`,
+            precio: -Math.abs(Number(l.precio) || 0)
+        })),
+        base: -Math.abs(Number(orig.base) || 0),
+        iva: -Math.abs(Number(orig.iva) || 0),
+        retencion: -Math.abs(Number(orig.retencion) || 0),
+        retencionPct: orig.retencionPct || 0,
+        total: -Math.abs(Number(orig.total) || 0),
+        estado: 'cobrado',
+        movimientosPago: []
+    };
+
+    const ultimaFactura = state.ingresos[state.ingresos.length - 1];
+    const hashPrevio = ultimaFactura?.verifactu?.hashActual || '0000000000000000000000000000000000000000000000000000000000000000';
+    rectificativa.verifactu = await generarHuellaVerifactu(rectificativa, state.perfil, hashPrevio);
+
+    state.ingresos.push(rectificativa);
     saveStorage();
+    alert(`Factura Rectificativa ${numRect} emitida y encadenada criptográficamente.`);
 }
 
 function renderClientes() {
@@ -1166,12 +1291,13 @@ function updateAEATView() {
     const model = document.getElementById('aeat-model-select').value;
     const period = document.getElementById('aeat-period-select').value;
     const q = parseInt(period.replace('T', ''));
-    const d = calculateQuarter(state, q);
+    const d = calculateQuarter(state, q, state.ejercicioActivo || 2026);
     const cont = document.getElementById('aeat-print-container');
     if (model === '303') {
         cont.innerHTML = `<div class="border-2 border-slate-800 p-4 space-y-3"><div class="flex justify-between border-b-2 border-slate-800 pb-2"><h3 class="font-extrabold text-sm">AEAT · MODELO 303 (IVA ${period})</h3><span class="text-2xl font-black">303</span></div><p class="font-bold">${state.perfil.nif} - ${state.perfil.nombre}</p><div class="font-mono space-y-1"><p class="flex justify-between"><span>[01] Base Devengada:</span><span>${formatEur(d.ingBase)}</span></p><p class="flex justify-between"><span>[03] IVA Devengado:</span><span>${formatEur(d.ingIva)}</span></p><p class="flex justify-between"><span>[23] IVA Deducible (Facturas Recibidas):</span><span>${formatEur(d.gasIva)}</span></p><p class="flex justify-between font-black bg-blue-50 p-1"><span>[48] RESULTADO LIQUIDACIÓN:</span><span>${formatEur(d.ivaLiquidacion)}</span></p></div></div>`;
     } else if (model === '130') {
-        cont.innerHTML = `<div class="border-2 border-slate-800 p-4 space-y-3"><div class="flex justify-between border-b-2 border-slate-800 pb-2"><h3 class="font-extrabold text-sm">AEAT · MODELO 130 (IRPF Acumulativo 1T-${period})</h3><span class="text-2xl font-black">130</span></div><p class="font-bold">${state.perfil.nif} - ${state.perfil.nombre}</p><div class="font-mono space-y-1"><p class="flex justify-between"><span>[01] Ingresos Acumulados:</span><span>${formatEur(d.ingBaseAcum)}</span></p><p class="flex justify-between"><span>[02] Gastos Deducibles Acumulados:</span><span>${formatEur(d.gasBaseAcum)}</span></p><p class="flex justify-between"><span>[03] Rendimiento Neto Acumulado:</span><span>${formatEur(d.rendNetoAcum)}</span></p><p class="flex justify-between"><span>[04] 20% Rendimiento Neto:</span><span>${formatEur(d.cuota20Acum)}</span></p><p class="flex justify-between text-rose-700"><span>[05] Pagos trimestres anteriores:</span><span>-${formatEur(d.pagosAnteriores)}</span></p><p class="flex justify-between text-rose-700"><span>[06] Retenciones soportadas en facturas:</span><span>-${formatEur(d.retencionesAcum)}</span></p><p class="flex justify-between font-black bg-blue-50 p-1"><span>[07] TOTAL A INGRESAR:</span><span>${formatEur(d.irpf130APagar)}</span></p></div></div>`;
+        cont.innerHTML = `<div class="border-2 border-slate-800 p-4 space-y-3"><div class="flex justify-between border-b-2 border-slate-800 pb-2"><h3 class="font-extrabold text-sm">AEAT · MODELO 130 (IRPF Acumulativo 1T-${period})</h3><span class="text-2xl font-black">130</span></div><p class="font-bold">${state.perfil.nif} - ${state.perfil.nombre}</p><div class="font-mono space-y-1"><p class="flex justify-between"><span>[01] Ingresos Acumulados:</span><span>${formatEur(d.ingBaseAcum)}</span></p><p class="flex justify-between"><span>[02] Gastos Deducibles Acumulados:</span><span>${formatEur(d.gasBaseAcum)}</span></p><p class="flex justify-between text-emerald-700"><span>[03b] Reducción 5% Difícil Justificación:</span><span>-${formatEur(d.gastosDificilJustificacion)}</span></p>
+        <p class="flex justify-between"><span>[03] Rendimiento Neto Reducido:</span><span>${formatEur(d.rendNetoAcum)}</span></p><p class="flex justify-between"><span>[04] 20% Rendimiento Neto:</span><span>${formatEur(d.cuota20Acum)}</span></p><p class="flex justify-between text-rose-700"><span>[05] Pagos trimestres anteriores:</span><span>-${formatEur(d.pagosAnteriores)}</span></p><p class="flex justify-between text-rose-700"><span>[06] Retenciones soportadas en facturas:</span><span>-${formatEur(d.retencionesAcum)}</span></p><p class="flex justify-between font-black bg-blue-50 p-1"><span>[07] TOTAL A INGRESAR:</span><span>${formatEur(d.irpf130APagar)}</span></p></div></div>`;
     } else {
         const totI = state.ingresos.reduce((s, i) => s + i.iva, 0);
         const totG = state.gastos.filter(g => g.tipo !== 'gasto').reduce((s, g) => s + g.iva, 0);
@@ -1692,21 +1818,45 @@ function generarFacturaPDF(id) {
     w.document.close();
 }
 
-function exportJSON() {
-    const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Mi_Autonomo_Backup_${new Date().toISOString().slice(0, 10)}.json`; a.click();
+async function exportJSON() {
+    const adjuntosIDB = await exportarTodosAdjuntosIDB();
+    const paqueteCompleto = {
+        formato: 'mi-autonomo-full-backup-v2',
+        fecha: new Date().toISOString(),
+        state,
+        adjuntosIDB
+    };
+    const blob = new Blob([JSON.stringify(paqueteCompleto)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Mi_Autonomo_Completo_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
 }
 
 function importJSON() {
     const file = document.getElementById('backup-file').files[0];
-    if (!file) return;
+    if (!file) { alert('Selecciona primero un archivo .json'); return; }
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
         try {
-            const data = JSON.parse(reader.result);
-            if (data && data.perfil && Array.isArray(data.ingresos)) { state = data; saveStorage(); alert('Copia restaurada.'); }
-        } catch (e) { alert('Archivo inválido.'); }
+            const parsed = JSON.parse(reader.result);
+            // Soporta tanto el formato completo v2 (con adjuntosIDB) como copias antiguas solo de state
+            const nuevoState = parsed.state ? parsed.state : parsed;
+            if (nuevoState && nuevoState.perfil && Array.isArray(nuevoState.ingresos)) {
+                state = nuevoState;
+                let numDocs = 0;
+                if (Array.isArray(parsed.adjuntosIDB) && parsed.adjuntosIDB.length) {
+                    numDocs = await importarTodosAdjuntosIDB(parsed.adjuntosIDB);
+                }
+                saveStorage();
+                alert(`Copia restaurada correctamente (${state.ingresos.length} facturas emitidas, ${state.gastos.length} gastos y ${numDocs} documentos adjuntos recuperados).`);
+            } else {
+                alert('El archivo no tiene una estructura válida.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error al leer el archivo de copia de seguridad.');
+        }
     };
     reader.readAsText(file);
 }
@@ -1724,6 +1874,8 @@ Object.assign(window, {
     guardarOnboarding,
     continuarSinEpigrafe,
     openCompraModal,
+    editarCompra,
+    cambiarEjercicioGlobal,
     iniciarEscaneoDocumento,
     manejarArchivoOCR,
     closeCompraModal,
@@ -1736,7 +1888,7 @@ Object.assign(window, {
     anadirLineaFactura,
     actualizarTotalesFactura,
     saveIngreso,
-    deleteIngreso,
+    emitirRectificativa,
     marcarCobradoRapido,
     generarFacturaPDF,
     exportarFacturaXML,

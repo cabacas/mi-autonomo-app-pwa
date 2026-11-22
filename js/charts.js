@@ -10,8 +10,9 @@ export function initOrUpdateDashboardChart(state) {
     const canvas = document.getElementById('chartTrimestres');
     if (!canvas || typeof Chart === 'undefined') return;
 
-    const dataIng = [1, 2, 3, 4].map(q => calculateQuarter(state, q).ingBase);
-    const dataGas = [1, 2, 3, 4].map(q => calculateQuarter(state, q).gasBaseIrpf);
+    const anio = state.ejercicioActivo || new Date().getFullYear();
+    const dataIng = [1, 2, 3, 4].map(q => calculateQuarter(state, q, anio).ingBase);
+    const dataGas = [1, 2, 3, 4].map(q => calculateQuarter(state, q, anio).gasBaseIrpf);
 
     if (chartTrimestres) {
         chartTrimestres.data.datasets[0].data = dataIng;

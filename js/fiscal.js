@@ -27,27 +27,41 @@ export function obtenerSaldoBancoActual(state) {
     return (Number(state.perfil.saldoInicialBanco) || 0) + calcularFlujoRegistrado(state);
 }
 
-export function calculateQuarter(state, q) {
-    const ingQ = state.ingresos.filter(i => i.trimestre === q);
-    const gasQ = state.gastos.filter(g => g.trimestre === q);
+export function calculateQuarter(state, q, anio = null) {
+    const anioObjetivo = anio ? String(anio) : String(state.ejercicioActivo || new Date().getFullYear());
+    const esMismoAnio = (item) => String(item.fecha || '').startsWith(anioObjetivo);
+
+    // IVA (Modelo 303): Estanco por trimestre y ejercicio
+    const ingQ = state.ingresos.filter(i => esMismoAnio(i) && i.trimestre === q);
+    const gasQ = state.gastos.filter(g => esMismoAnio(g) && g.trimestre === q);
     const ingBaseQ = ingQ.reduce((a, b) => a + (Number(b.base) || 0), 0);
     const ingIvaQ = ingQ.reduce((a, b) => a + (Number(b.iva) || 0), 0);
     const gasBaseIrpfQ = gasQ.reduce((a, b) => a + (Number(b.baseIrpf) || 0), 0);
     const gasIvaQ = gasQ.filter(g => g.tipo !== 'gasto').reduce((a, b) => a + (Number(b.iva) || 0), 0);
     const ivaLiquidacion = ingIvaQ - gasIvaQ;
 
-    const ingAcum = state.ingresos.filter(i => i.trimestre <= q);
-    const gasAcum = state.gastos.filter(g => g.trimestre <= q);
+    // IRPF (Modelo 130): Acumulativo desde 1T hasta trimestre q dentro del mismo año fiscal
+    const ingAcum = state.ingresos.filter(i => esMismoAnio(i) && i.trimestre <= q);
+    const gasAcum = state.gastos.filter(g => esMismoAnio(g) && g.trimestre <= q);
     const ingBaseAcum = ingAcum.reduce((a, b) => a + (Number(b.base) || 0), 0);
     const gasBaseAcum = gasAcum.reduce((a, b) => a + (Number(b.baseIrpf) || 0), 0);
-    const rendNetoAcum = ingBaseAcum - gasBaseAcum;
+
+    // Rendimiento neto previo acumulado
+    const rendNetoPrevioAcum = ingBaseAcum - gasBaseAcum;
+    // Deducción AEAT del 5% por provisiones y gastos de difícil justificación (Est. Directa Simplificada, tope 2.000 €/año)
+    const gastosDificilJustificacion = rendNetoPrevioAcum > 0
+        ? Math.min(2000, Math.round(rendNetoPrevioAcum * 0.05 * 100) / 100)
+        : 0;
+    const rendNetoAcum = rendNetoPrevioAcum - gastosDificilJustificacion;
     const cuota20Acum = rendNetoAcum > 0 ? rendNetoAcum * 0.20 : 0;
 
+    // Casilla 06 Mod 130: Retenciones IRPF soportadas acumuladas
     const retencionesAcum = ingAcum.reduce((a, b) => a + (Number(b.retencion) || 0), 0);
 
+    // Casilla 05 Mod 130: Pagos fraccionados positivos ingresados en trimestres anteriores del mismo año
     let pagosAnteriores = 0;
     for (let prev = 1; prev < q; prev++) {
-        const prevData = calculateQuarter(state, prev);
+        const prevData = calculateQuarter(state, prev, anioObjetivo);
         if (prevData.irpf130APagar > 0) pagosAnteriores += prevData.irpf130APagar;
     }
 
@@ -55,6 +69,7 @@ export function calculateQuarter(state, q) {
 
     return {
         q,
+        anio: anioObjetivo,
         ingBase: ingBaseQ,
         ingIva: ingIvaQ,
         gasBaseIrpf: gasBaseIrpfQ,
@@ -63,6 +78,8 @@ export function calculateQuarter(state, q) {
         ivaLiquidacion,
         ingBaseAcum,
         gasBaseAcum,
+        rendNetoPrevioAcum,
+        gastosDificilJustificacion,
         rendNetoAcum,
         cuota20Acum,
         retencionesAcum,

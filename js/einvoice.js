@@ -29,7 +29,9 @@ export async function generarHuellaVerifactu(factura, perfil, hashAnterior = '00
     ].join('&');
 
     const hashActual = await calcularSHA256(cadenaHuella);
-    const urlCotejoAEAT = `https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif=${encodeURIComponent(perfil.nif || '')}&numserie=${encodeURIComponent(factura.numero || '')}&fecha=${encodeURIComponent(factura.fecha || '')}&importe=${Number(factura.total || 0).toFixed(2)}`;
+    const fechaParts = String(factura.fecha || '').split('-');
+    const fechaAEAT = fechaParts.length === 3 ? `${fechaParts[2]}-${fechaParts[1]}-${fechaParts[0]}` : (factura.fecha || '');
+    const urlCotejoAEAT = `https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif=${encodeURIComponent(perfil.nif || '')}&numserie=${encodeURIComponent(factura.numero || '')}&fecha=${encodeURIComponent(fechaAEAT)}&importe=${Number(factura.total || 0).toFixed(2)}`;
 
     return {
         hashAnterior,
