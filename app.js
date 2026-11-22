@@ -22,6 +22,12 @@ import {
     renderAnalisisEconomicoCharts
 } from './charts.js';
 
+import {
+    generarHuellaVerifactu,
+    descargarXMLFacturae,
+    generarQRTributarioSVG
+} from './einvoice.js';
+
 let state = getDefaultState();
 let iaeSeleccionadoOnboarding = null;
 let volverAFactura = false;
@@ -349,7 +355,8 @@ function renderIngresos() {
                 <td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${badgeClass}">${i.estado.toUpperCase()}</span></td>
                 <td class="px-3 py-2.5 text-center whitespace-nowrap">
                     ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="text-emerald-600 px-1.5" title="Cobrar"><i class="fa-solid fa-check-circle"></i></button>` : ''}
-                    <button onclick="generarFacturaPDF(${i.id})" class="text-blue-600 px-1.5" title="PDF"><i class="fa-solid fa-file-pdf"></i></button>
+                    <button onclick="generarFacturaPDF(${i.id})" class="text-blue-600 hover:text-blue-800 px-1.5" title="Factura PDF + QR"><i class="fa-solid fa-file-pdf"></i></button>
+                    <button onclick="exportarFacturaXML(${i.id})" class="text-indigo-600 hover:text-indigo-800 px-1.5 font-bold text-[11px]" title="Descargar XML Facturae 3.2.2">XML</button>
                     <button onclick="deleteIngreso(${i.id})" class="text-rose-600 px-1.5"><i class="fa-solid fa-trash"></i></button>
                 </td>
             </tr>`;
@@ -370,6 +377,7 @@ function renderIngresos() {
                 <div class="flex gap-2 pt-2 border-t">
                     ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold"><i class="fa-solid fa-check mr-1"></i>Cobrar</button>` : ''}
                     <button onclick="generarFacturaPDF(${i.id})" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>
+                    <button onclick="exportarFacturaXML(${i.id})" class="flex-1 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold"><i class="fa-solid fa-code mr-1"></i>Facturae XML</button>
                     <button onclick="deleteIngreso(${i.id})" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </article>`;
@@ -714,7 +722,7 @@ function actualizarTotalesFactura() {
     return { base, iva, ret, irpfPct, total };
 }
 
-function saveIngreso(e) {
+async function saveIngreso(e) {
     e.preventDefault();
     const c = state.clientes.find(x => String(x.id) === document.getElementById('ing-cliente').value);
     if (!c) return;
@@ -727,14 +735,22 @@ function saveIngreso(e) {
         precio: Number(el.querySelector('[data-campo="precio"]').value) || 0,
         iva: Number(el.querySelector('[data-campo="iva"]').value) || 0
     }));
-    state.ingresos.push({
+
+    const nuevaFactura = {
         id: Date.now(), numero: document.getElementById('ing-numero').value, fecha,
         clienteId: c.id, cliente: c.nombre, nif: c.nif, clienteDireccion: c.direccion || '',
         trimestre: parseInt(document.getElementById('ing-trimestre').value),
         lineas: lineasCapturadas,
         base: t.base, iva: t.iva, retencion: t.ret, retencionPct: t.irpfPct, total: t.total, estado,
         movimientosPago: estado === 'cobrado' ? [{ id: Date.now(), fecha, importe: t.total }] : []
-    });
+    };
+
+    // Encadenamiento criptográfico Veri*factu (SHA-256 con factura previa)
+    const ultimaFactura = state.ingresos[state.ingresos.length - 1];
+    const hashPrevio = ultimaFactura?.verifactu?.hashActual || '0000000000000000000000000000000000000000000000000000000000000000';
+    nuevaFactura.verifactu = await generarHuellaVerifactu(nuevaFactura, state.perfil, hashPrevio);
+
+    state.ingresos.push(nuevaFactura);
     closeIngresoModal();
     saveStorage();
 }
@@ -960,6 +976,14 @@ function obtenerSiluetaCiudadSVG(ciudadRaw, colorAcento) {
         <path d="M122 510 L122 435 A20 20 0 0 1 162 435 L162 510 Z" fill="#ffffff" opacity="0.7"/>
         <path d="M36 510 L36 445 A16 16 0 0 1 68 445 L68 510 Z" fill="#ffffff" opacity="0.7"/>
     </svg>`;
+}
+
+
+function exportarFacturaXML(id) {
+    const f = state.ingresos.find(x => x.id === id);
+    if (!f) return;
+    const cli = state.clientes.find(c => String(c.id) === String(f.clienteId)) || {};
+    descargarXMLFacturae(f, state.perfil, cli);
 }
 
 function generarFacturaPDF(id) {
@@ -1320,8 +1344,14 @@ function generarFacturaPDF(id) {
                 <p>NIF: ${state.perfil.nif || '—'} &nbsp;·&nbsp; ${state.perfil.direccion || ciudadActual}</p>
                 <p>${state.perfil.telefono ? 'Tel. ' + state.perfil.telefono + ' · ' : ''}${state.perfil.iae || 'Actividad Económica'}</p>
             </div>
-            <div class="doc-badge">
-                <span>Factura</span>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+                <div style="text-align:right;">
+                    <div class="doc-badge"><span>Factura</span></div>
+                    <div style="font-size:8px;color:#64748b;margin-top:4px;font-weight:600;">QR Tributario · Veri*factu</div>
+                </div>
+                <div style="width:54px;height:54px;border:1px solid #cbd5e1;padding:2px;background:#fff;border-radius:4px;">
+                    ${generarQRTributarioSVG(f.verifactu?.urlCotejoAEAT || ('AEAT|' + (state.perfil.nif||'') + '|' + f.numero + '|' + f.total))}
+                </div>
             </div>
         </header>
 
@@ -1389,7 +1419,8 @@ function generarFacturaPDF(id) {
             </div>
         </div>
         <p class="legal-note">
-            Factura expedida conforme al Reglamento por el que se regulan las obligaciones de facturación aprobado por el Real Decreto 1619/2012 (Agencia Estatal de Administración Tributaria).
+            Factura expedida conforme al RD 1619/2012 y trazabilidad RD 1007/2023 (Veri*factu).
+            ${f.verifactu ? `<br><span style="font-family:monospace;font-size:7.5px;color:#475569;">Huella SHA-256: ${f.verifactu.hashActual}</span>` : ''}
         </p>
     </footer>
 
@@ -1448,6 +1479,7 @@ Object.assign(window, {
     deleteIngreso,
     marcarCobradoRapido,
     generarFacturaPDF,
+    exportarFacturaXML,
     openClienteModal,
     closeClienteModal,
     saveCliente,
