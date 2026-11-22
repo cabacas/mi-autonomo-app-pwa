@@ -997,10 +997,9 @@ function generarFacturaPDF(id) {
         </tr>
     `).join('');
 
-    // Iniciales del emisor para monograma de membrete si no hay logo subido
     const nombreEmisor = state.perfil.nombre || 'Mi Actividad Profesional';
     const iniciales = nombreEmisor.split(' ').filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join('');
-    const colorPizarra = '#5c7684'; // Tono neutro azul-pizarra elegante como la referencia
+    const colorPizarra = '#5c7684';
     const ciudadActual = state.perfil.ciudad || 'España';
     const siluetaCiudad = obtenerSiluetaCiudadSVG(ciudadActual, colorPizarra);
 
@@ -1013,9 +1012,9 @@ function generarFacturaPDF(id) {
 <meta charset="UTF-8">
 <title>Factura ${f.numero} - ${nombreEmisor}</title>
 <style>
-    @page { size: A4; margin: 0; }
+    @page { size: A4 portrait; margin: 0; }
     * { box-sizing: border-box; }
-    body {
+    html, body {
         margin: 0;
         padding: 0;
         background: #e2e8f0;
@@ -1029,36 +1028,32 @@ function generarFacturaPDF(id) {
     .page-a4 {
         position: relative;
         width: 210mm;
-        min-height: 297mm;
+        height: 297mm;
         margin: 15px auto;
         background: #ffffff;
         box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
         overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
     }
-    /* Ilustración arquitectónica lateral izquierda + zócalo inferior continuo */
+    /* Ilustración arquitectónica lateral izquierda anclada al zócalo inferior */
     .left-illustration {
         position: absolute;
         left: 6mm;
-        bottom: 10mm;
-        width: 56mm;
-        height: 145mm;
+        bottom: 9mm;
+        width: 54mm;
+        height: 142mm;
         pointer-events: none;
         z-index: 1;
     }
-    /* Silueta urbana tenue de fondo en la parte inferior */
     .city-horizon-bg {
         position: absolute;
         left: 0;
         right: 0;
-        bottom: 10mm;
-        height: 44mm;
+        bottom: 9mm;
+        height: 42mm;
         background-image: repeating-linear-gradient(
             90deg,
-            rgba(92, 118, 132, 0.04) 0px,
-            rgba(92, 118, 132, 0.04) 38px,
+            rgba(92, 118, 132, 0.035) 0px,
+            rgba(92, 118, 132, 0.035) 38px,
             transparent 38px,
             transparent 46px
         );
@@ -1066,40 +1061,41 @@ function generarFacturaPDF(id) {
         pointer-events: none;
         z-index: 0;
     }
+    /* Zócalo sólido al borde inferior de la hoja */
     .bottom-plinth {
-        height: 10mm;
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 9mm;
         background: ${colorPizarra};
-        width: 100%;
-        position: relative;
-        z-index: 3;
+        z-index: 4;
     }
-    .content-wrapper {
+
+    /* Contenedor superior: empieza arriba y ocupa el cuerpo natural sin centrarse */
+    .top-body {
         position: relative;
         z-index: 2;
-        padding: 18mm 18mm 14mm 20mm;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
+        padding: 16mm 18mm 0 18mm;
     }
-    /* Membrete elegante superior */
     .letterhead {
         display: flex;
         align-items: center;
-        gap: 16px;
-        padding-bottom: 14px;
+        gap: 15px;
+        padding-bottom: 13px;
         border-bottom: 1px solid #cbd5e1;
-        margin-bottom: 24px;
+        margin-bottom: 22px;
     }
     .monogram {
-        width: 48px;
-        height: 48px;
+        width: 46px;
+        height: 46px;
         border: 1.5px solid ${colorPizarra};
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: Georgia, 'Times New Roman', serif;
-        font-size: 18px;
+        font-size: 17px;
         font-weight: bold;
         color: ${colorPizarra};
         letter-spacing: 1px;
@@ -1107,10 +1103,10 @@ function generarFacturaPDF(id) {
     }
     .brand-info h1 {
         margin: 0;
-        font-size: 20px;
-        font-weight: 500;
+        font-size: 19px;
+        font-weight: 600;
         color: ${colorPizarra};
-        letter-spacing: 0.4px;
+        letter-spacing: 0.3px;
     }
     .brand-info p {
         margin: 2px 0 0 0;
@@ -1128,12 +1124,12 @@ function generarFacturaPDF(id) {
         text-transform: uppercase;
         letter-spacing: 2px;
         color: ${colorPizarra};
-        border: 1px solid ${colorPizarra};
+        border: 1.5px solid ${colorPizarra};
         padding: 4px 12px;
         border-radius: 3px;
     }
 
-    /* Bloque de datos desplazado ligeramente para convivir con la silueta izquierda */
+    /* Bloque de datos y tabla */
     .main-grid {
         padding-left: 34mm;
     }
@@ -1141,17 +1137,18 @@ function generarFacturaPDF(id) {
         display: flex;
         justify-content: space-between;
         gap: 16px;
-        margin-bottom: 26px;
+        margin-bottom: 24px;
     }
     .client-block {
         width: 54%;
     }
     .section-label {
         font-size: 10.5px;
-        font-weight: 600;
+        font-weight: 700;
         color: ${colorPizarra};
-        margin-bottom: 6px;
-        letter-spacing: 0.2px;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
     }
     .client-block p {
         margin: 2px 0;
@@ -1166,6 +1163,7 @@ function generarFacturaPDF(id) {
         display: flex;
         justify-content: space-between;
         padding: 3px 0;
+        border-bottom: 1px dotted #e2e8f0;
     }
     .meta-row span:first-child {
         color: ${colorPizarra};
@@ -1176,7 +1174,6 @@ function generarFacturaPDF(id) {
         color: #1e293b;
     }
 
-    /* Tabla minimalista de líneas */
     table.items {
         width: 100%;
         border-collapse: collapse;
@@ -1202,7 +1199,6 @@ function generarFacturaPDF(id) {
     .iva-tag { font-size: 9.5px; color: #94a3b8; margin-left: 4px; }
     .font-bold { font-weight: 700; color: #0f172a; }
 
-    /* Totales alineados a la derecha */
     .totals-section {
         display: flex;
         justify-content: space-between;
@@ -1240,21 +1236,20 @@ function generarFacturaPDF(id) {
         padding: 8px 6px;
         margin-top: 4px;
         border-top: 1.5px solid ${colorPizarra};
-        font-size: 13.5px;
+        font-size: 14px;
         font-weight: 800;
     }
     .tot-grand span:first-child { color: ${colorPizarra}; }
     .tot-grand span:last-child { color: #0f172a; }
 
-    /* Firma caligráfica estilizada */
     .signature-area {
-        margin-top: 26px;
+        margin-top: 22px;
         text-align: right;
-        padding-right: 12px;
+        padding-right: 10px;
     }
     .signature-script {
         font-family: 'Brush Script MT', 'Segoe Script', Georgia, cursive;
-        font-size: 26px;
+        font-size: 25px;
         color: #1e293b;
         transform: rotate(-3deg);
         display: inline-block;
@@ -1267,26 +1262,42 @@ function generarFacturaPDF(id) {
         margin-top: 3px;
     }
 
-    /* Condiciones y datos bancarios al pie */
-    .payment-footer {
-        margin-top: auto;
-        padding-top: 24px;
-        font-size: 10.5px;
+    /* BLOQUE INFERIOR FIJO EN EL BOTTOM DE LA HOJA A4 */
+    .bottom-docked-footer {
+        position: absolute;
+        left: 52mm;
+        right: 18mm;
+        bottom: 13mm;
+        z-index: 3;
+        border-top: 1px solid #cbd5e1;
+        padding-top: 10px;
+        font-size: 10px;
     }
-    .payment-footer h4 {
-        margin: 0 0 4px 0;
+    .payment-grid {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 8px;
+    }
+    .payment-col h4 {
+        margin: 0 0 3px 0;
         color: ${colorPizarra};
-        font-size: 11px;
-        font-weight: 600;
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
     }
-    .payment-footer p {
-        margin: 2px 0;
+    .payment-col p {
+        margin: 1.5px 0;
         color: #475569;
     }
     .legal-note {
-        margin-top: 14px;
+        margin: 6px 0 0 0;
+        padding-top: 6px;
+        border-top: 1px dashed #e2e8f0;
         font-size: 8.5px;
-        color: #94a3b8;
+        color: #64748b;
+        line-height: 1.35;
     }
 
     @media print {
@@ -1300,8 +1311,8 @@ function generarFacturaPDF(id) {
     <div class="city-horizon-bg"></div>
     <div class="left-illustration">${siluetaCiudad}</div>
 
-    <div class="content-wrapper">
-        <!-- MEMBRETE SUPERIOR -->
+    <!-- PARTE SUPERIOR Y CUERPO (EMPIEZA ARRIBA) -->
+    <div class="top-body">
         <header class="letterhead">
             <div class="monogram">${iniciales}</div>
             <div class="brand-info">
@@ -1314,7 +1325,6 @@ function generarFacturaPDF(id) {
             </div>
         </header>
 
-        <!-- CUERPO PRINCIPAL -->
         <div class="main-grid">
             <div class="meta-parties">
                 <div class="client-block">
@@ -1361,16 +1371,27 @@ function generarFacturaPDF(id) {
                 <div class="signature-script">${nombreEmisor}</div>
                 <div class="signature-caption">Sello y firma del expedidor</div>
             </div>
-
-            <div class="payment-footer">
-                <h4>Condiciones y forma de pago</h4>
-                <p>El pago se realizará mediante transferencia bancaria en un plazo de 30 días.</p>
-                <p style="margin-top:6px;"><strong>Titular:</strong> ${nombreEmisor}</p>
-                <p><strong>IBAN:</strong> <span style="font-family:monospace;">${state.perfil.iban || 'No especificado en perfil'}</span></p>
-                <p class="legal-note">Factura expedida conforme al Reglamento de Facturación aprobado por el Real Decreto 1619/2012 (AEAT).</p>
-            </div>
         </div>
     </div>
+
+    <!-- PARTE INFERIOR ANCLADA AL BOTTOM DEL A4 -->
+    <footer class="bottom-docked-footer">
+        <div class="payment-grid">
+            <div class="payment-col">
+                <h4>Condiciones y forma de pago</h4>
+                <p>Transferencia bancaria · Vencimiento a 30 días.</p>
+                <p><strong>Titular:</strong> ${nombreEmisor}</p>
+            </div>
+            <div class="payment-col" style="text-align:right;">
+                <h4>Datos bancarios</h4>
+                <p><strong>IBAN:</strong> <span style="font-family:monospace;">${state.perfil.iban || 'No especificado en perfil'}</span></p>
+                <p><strong>Ref. pago:</strong> ${f.numero}</p>
+            </div>
+        </div>
+        <p class="legal-note">
+            Factura expedida conforme al Reglamento por el que se regulan las obligaciones de facturación aprobado por el Real Decreto 1619/2012 (Agencia Estatal de Administración Tributaria).
+        </p>
+    </footer>
 
     <div class="bottom-plinth"></div>
 </div>
