@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mi-autonomo-pwa-v3';
+const CACHE_NAME = 'mi-autonomo-pwa-v4';
 
 const APP_SHELL = [
   './',
@@ -16,35 +16,36 @@ const APP_SHELL = [
   './js/benchmark.js'
 ];
 
-// Instalación: cachear archivos locales de la app
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(APP_SHELL);
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
   );
   self.skipWaiting();
 });
 
-// Activación: limpiar cachés antiguas
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-      )
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
-// Intercepción de peticiones: Network-First para archivos locales (siempre actualizado si hay red),
-// con respaldo offline en caché; Stale-While-Revalidate para recursos CDN externos.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
   const isLocal = url.origin === self.location.origin;
+
+  // No interceptar llamadas dinámicas a APIs de mapas / datos abiertos (dejar que el navegador las gestione directo)
+  if (
+    url.hostname.includes('overpass') ||
+    url.hostname.includes('openstreetmap.org') ||
+    url.hostname.includes('agenciatributaria.gob.es')
+  ) {
+    return;
+  }
 
   if (isLocal) {
     event.respondWith(
@@ -56,7 +57,10 @@ self.addEventListener('fetch', event => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || new Response('Sin conexión', { status: 503, statusText: 'Offline' });
+        })
     );
   } else {
     event.respondWith(
@@ -69,7 +73,7 @@ self.addEventListener('fetch', event => {
             }
             return networkResponse;
           })
-          .catch(() => cached);
+          .catch(() => cached || new Response('', { status: 504 }));
         return cached || fetchPromise;
       })
     );
