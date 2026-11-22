@@ -99,8 +99,8 @@ export function obtenerBenchmarkSectorial(perfil, catalogoIAE) {
 }
 
 /**
- * Consulta registros públicos abiertos de OpenStreetMap (Nominatim + Overpass API)
- * para detectar negocios competidores reales en la ciudad configurada.
+ * Consulta registros públicos abiertos de OpenStreetMap (Nominatim + espejos Overpass con CORS)
+ * con fallback automático entre servidores para evitar saturación o bloqueos CORS.
  */
 export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
     const ciudadLimpia = String(ciudad || '').trim();
@@ -119,8 +119,7 @@ export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
     const lon = parseFloat(dataNom[0].lon);
     const nombreOficial = dataNom[0].display_name.split(',')[0];
 
-    // 2. Consultar negocios del sector en un radio de 3.5 km usando Overpass API
-    // Construir filtro Overpass según el sector
+    // 2. Construir consulta Overpass según sector
     let filtroOverpass = '';
     if (sector === 'Tecnología y Marketing') {
         filtroOverpass = `node["office"~"it|company|advertising"](around:3500,${lat},${lon});way["office"~"it|company|advertising"](around:3500,${lat},${lon});`;
@@ -138,13 +137,55 @@ export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
         filtroOverpass = `node["office"](around:3000,${lat},${lon});node["craft"](around:3000,${lat},${lon});`;
     }
 
-    const query = `[out:json][timeout:12];(${filtroOverpass});out center 60;`;
-    const ovUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-    const resOv = await fetch(ovUrl);
-    if (!resOv.ok) throw new Error('El servidor de registros locales tardó demasiado en responder.');
-    const dataOv = await resOv.json();
+    const query = `[out:json][timeout:10];(${filtroOverpass});out center 50;`;
 
-    const elementos = Array.isArray(dataOv.elements) ? dataOv.elements : [];
+    // Lista de servidores Overpass con soporte CORS (si el principal está saturado/504 sin cabeceras CORS, salta al siguiente)
+    const endpointsOverpass = [
+        'https://overpass.kumi.systems/api/interpreter',
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+        'https://overpass-api.de/api/interpreter'
+    ];
+
+    let elementos = null;
+    for (const baseEndpoint of endpointsOverpass) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 9000);
+            const resp = await fetch(`${baseEndpoint}?data=${encodeURIComponent(query)}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timer);
+            if (resp.ok) {
+                const json = await resp.json();
+                if (json && Array.isArray(json.elements)) {
+                    elementos = json.elements;
+                    break;
+                }
+            }
+        } catch {
+            // Probar el siguiente espejo Overpass
+        }
+    }
+
+    // Respaldo secundario con búsqueda Nominatim por palabra clave en la ciudad si todos los espejos Overpass están caídos
+    if (!elementos) {
+        const kw = (BENCHMARKS_SECTOR[sector]?.keywordsLocal || ['empresa'])[0];
+        const fallbackUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(kw + ' ' + nombreOficial)}&format=json&limit=20`;
+        const resFb = await fetch(fallbackUrl, { headers: { 'Accept-Language': 'es' } });
+        const dataFb = resFb.ok ? await resFb.json() : [];
+        const muestraFb = (Array.isArray(dataFb) ? dataFb : []).map(item => ({
+            nombre: item.display_name.split(',')[0],
+            categoria: sector,
+            direccion: item.display_name.split(',').slice(1, 3).join(',').trim() || nombreOficial
+        }));
+        return {
+            ciudadOficial: nombreOficial,
+            totalDetectados: muestraFb.length,
+            muestraNegocios: muestraFb.slice(0, 12),
+            radioKm: 3.5
+        };
+    }
+
     const negociosConNombre = [];
     const vistos = new Set();
 
