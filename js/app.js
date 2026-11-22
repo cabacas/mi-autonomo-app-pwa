@@ -14,7 +14,8 @@ import {
     importePendiente,
     calcularFlujoRegistrado,
     obtenerSaldoBancoActual,
-    calculateQuarter
+    calculateQuarter,
+    validarDocumentoFiscalES
 } from './fiscal.js';
 
 import {
@@ -576,6 +577,13 @@ async function saveCompra(e) {
     if (tipo === 'factura') {
         numFactura = document.getElementById('comp-num-factura').value.trim();
         nifProveedor = document.getElementById('comp-nif-proveedor').value.trim().toUpperCase();
+        if (nifProveedor) {
+            const checkProv = validarDocumentoFiscalES(nifProveedor);
+            if (!checkProv.valido && !confirm(`Aviso en NIF/CIF del proveedor:\n${checkProv.mensaje}\n\n¿Guardar factura igualmente?`)) {
+                document.getElementById('comp-nif-proveedor').focus();
+                return;
+            }
+        }
         baseIva = Number(document.getElementById('comp-base').value) || 0;
         baseIrpf = baseIva;
         ivaPct = Number(document.getElementById('comp-iva-pct').value) || 0;
@@ -795,6 +803,12 @@ function closeClienteModal() {
 }
 function saveCliente(e) {
     e.preventDefault();
+    const nifCli = document.getElementById('cli-nif').value.trim().toUpperCase();
+    const checkCli = validarDocumentoFiscalES(nifCli);
+    if (!checkCli.valido && !confirm(`Aviso en NIF/CIF del cliente:\n${checkCli.mensaje}\n\n¿Deseas guardar este cliente de todos modos?`)) {
+        document.getElementById('cli-nif').focus();
+        return;
+    }
     const nuevo = {
         id: Date.now(), nombre: document.getElementById('cli-nombre').value.trim(),
         nif: document.getElementById('cli-nif').value.trim().toUpperCase(),
@@ -886,8 +900,44 @@ function renderVencimientos() {
     tbody.innerHTML = todos.length ? todos.map(x => `<tr class="border-b"><td class="p-3"><span class="text-[10px] font-bold px-2 py-0.5 rounded ${x.tipo === 'COBRO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${x.tipo}</span></td><td class="p-3 text-xs">${fechaLocal(x.fecha)}</td><td class="p-3 font-semibold text-xs">${x.nombre}</td><td class="p-3 text-right font-bold text-xs">${formatEur(x.imp)}</td></tr>`).join('') : '<tr><td colspan="4" class="p-4 text-center text-xs text-slate-400">Sin vencimientos pendientes</td></tr>';
 }
 
+
+/* ================= VALIDACIÓN VISUAL EN VIVO DE NIF / NIE / CIF ================= */
+function comprobarInputFiscal(inputId, feedbackId) {
+    const input = document.getElementById(inputId);
+    const feedback = document.getElementById(feedbackId);
+    if (!input || !feedback) return { valido: true };
+
+    const val = input.value.trim();
+    if (!val) {
+        feedback.classList.add('hidden');
+        input.classList.remove('border-emerald-500', 'border-rose-500');
+        return { valido: false };
+    }
+
+    const res = validarDocumentoFiscalES(val);
+    feedback.classList.remove('hidden');
+    if (res.valido) {
+        input.classList.remove('border-rose-500');
+        input.classList.add('border-emerald-500');
+        feedback.className = 'text-[11px] font-bold text-emerald-700 mt-1';
+        feedback.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i>${res.mensaje}`;
+    } else {
+        input.classList.remove('border-emerald-500');
+        input.classList.add('border-rose-500');
+        feedback.className = 'text-[11px] font-bold text-rose-600 mt-1';
+        feedback.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i>${res.mensaje}`;
+    }
+    return res;
+}
+
 function savePerfil(e) {
     e.preventDefault();
+    const nifVal = document.getElementById('prof-nif').value.trim().toUpperCase();
+    const checkNif = validarDocumentoFiscalES(nifVal);
+    if (!checkNif.valido && !confirm(`Aviso fiscal AEAT:\n${checkNif.mensaje}\n\n¿Deseas guardarlo de todos modos?`)) {
+        document.getElementById('prof-nif').focus();
+        return;
+    }
     state.perfil.nombre = document.getElementById('prof-nombre').value;
     state.perfil.nif = document.getElementById('prof-nif').value;
     state.perfil.iae = document.getElementById('prof-iae').value;
@@ -1493,6 +1543,7 @@ Object.assign(window, {
     guardarPresupuesto,
     convertirPresupuesto,
     savePerfil,
+    comprobarInputFiscal,
     updateAEATView,
     descargarImpresoPDF,
     exportJSON,

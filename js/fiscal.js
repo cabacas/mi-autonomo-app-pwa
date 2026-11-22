@@ -70,3 +70,88 @@ export function calculateQuarter(state, q) {
         irpf130APagar
     };
 }
+
+/* ================= VALIDADOR OFICIAL DE NIF / NIE / CIF ESPAÑOL (AEAT) ================= */
+export function validarDocumentoFiscalES(docRaw) {
+    const doc = String(docRaw || '').trim().toUpperCase().replace(/[\s\-]/g, '');
+    if (!doc) return { valido: false, tipo: 'VACÍO', mensaje: 'El NIF/CIF es obligatorio.' };
+
+    // 1. DNI / NIF (8 dígitos + letra) y NIE (X/Y/Z + 7 dígitos + letra)
+    const nifRegex = /^[XYZ\d]\d{7}[A-Z]$/;
+    if (nifRegex.test(doc)) {
+        const letras = 'TRWAGMYFPDXBNJZSQVHLCKE';
+        let numeroStr = doc.slice(0, 8)
+            .replace(/^X/, '0')
+            .replace(/^Y/, '1')
+            .replace(/^Z/, '2');
+        const numero = parseInt(numeroStr, 10);
+        const letraEsperada = letras[numero % 23];
+        const letraActual = doc.charAt(8);
+        const tipo = /^[XYZ]/.test(doc) ? 'NIE' : 'DNI/NIF';
+        if (letraActual === letraEsperada) {
+            return { valido: true, tipo, mensaje: `${tipo} válido.` };
+        }
+        return {
+            valido: false,
+            tipo,
+            mensaje: `${tipo} incorrecto: para ese número corresponde la letra "${letraEsperada}" (has puesto "${letraActual}").`
+        };
+    }
+
+    // 2. CIF Personas Jurídicas (Letra A-H, J, N, P-S, U-W + 7 dígitos + dígito/letra control)
+    const cifRegex = /^([ABCDEFGHJKLMNPQRSUVW])(\d{7})([0-9A-J])$/;
+    const matchCif = doc.match(cifRegex);
+    if (matchCif) {
+        const letraOrg = matchCif[1];
+        const digitos = matchCif[2];
+        const controlActual = matchCif[3];
+
+        let sumaPares = 0;
+        let sumaImpares = 0;
+        for (let i = 0; i < 7; i++) {
+            const n = parseInt(digitos.charAt(i), 10);
+            if ((i + 1) % 2 === 0) {
+                sumaPares += n;
+            } else {
+                const doble = n * 2;
+                sumaImpares += Math.floor(doble / 10) + (doble % 10);
+            }
+        }
+        const sumaTotal = sumaPares + sumaImpares;
+        const unidad = sumaTotal % 10;
+        const digitoControl = unidad === 0 ? 0 : 10 - unidad;
+        const letraControl = 'JABCDEFGHI'[digitoControl];
+
+        // Organizaciones que llevan obligatoriamente letra vs número vs ambos
+        const soloLetra = 'KPQRSNW'.includes(letraOrg);
+        const soloNumero = 'ABEH'.includes(letraOrg);
+
+        let esValido = false;
+        let esperadoTxt = '';
+        if (soloLetra) {
+            esValido = controlActual === letraControl;
+            esperadoTxt = `letra "${letraControl}"`;
+        } else if (soloNumero) {
+            esValido = controlActual === String(digitoControl);
+            esperadoTxt = `dígito "${digitoControl}"`;
+        } else {
+            esValido = (controlActual === String(digitoControl) || controlActual === letraControl);
+            esperadoTxt = `"${digitoControl}" o "${letraControl}"`;
+        }
+
+        if (esValido) {
+            return { valido: true, tipo: 'CIF', mensaje: 'CIF de entidad válido.' };
+        }
+        return {
+            valido: false,
+            tipo: 'CIF',
+            mensaje: `CIF incorrecto: el carácter de control debería ser ${esperadoTxt} (has puesto "${controlActual}").`
+        };
+    }
+
+    return {
+        valido: false,
+        tipo: 'DESCONOCIDO',
+        mensaje: 'Formato no reconocido. Debe ser DNI (8 números + letra), NIE (X/Y/Z + 7 números + letra) o CIF (Letra + 7 números + control).'
+    };
+}
