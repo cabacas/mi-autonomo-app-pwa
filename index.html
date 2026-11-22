@@ -97,7 +97,7 @@
                     <div>
                         <p class="text-xs font-bold uppercase tracking-wider text-blue-600">PANEL DE CONTROL</p>
                         <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">¡Hola, <span id="dash-nombre">Rafa</span>! 👋</h2>
-                        <p id="dash-subtitulo-actividad" class="text-xs sm:text-sm text-slate-500 mt-0.5">Resumen de tu actividad · Ejercicio 2026</p>
+                        <div class="flex items-center gap-2 mt-1"><p id="dash-subtitulo-actividad" class="text-xs sm:text-sm text-slate-500">Resumen de tu actividad</p><select id="global-ejercicio-select" onchange="cambiarEjercicioGlobal(this.value)" class="border border-blue-200 bg-blue-50 text-blue-800 font-extrabold text-xs rounded-lg px-2 py-1"><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select></div>
                     </div>
                     <div class="hidden sm:flex items-center gap-2">
                         <button onclick="openCompraModal('factura')" class="rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold px-3.5 py-2.5"><i class="fa-solid fa-file-invoice mr-1"></i> Factura recibida</button>
@@ -126,7 +126,7 @@
 
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                     <article class="app-card p-4 sm:p-5 xl:col-span-2">
-                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3"><div><h3 class="font-extrabold text-slate-900">Evolución trimestral</h3><p class="text-xs text-slate-500">Ingresos frente a compras y gastos deducibles</p></div><span class="text-xs rounded-full bg-blue-50 text-blue-700 px-3 py-1 font-bold">2026</span></div>
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3"><div><h3 class="font-extrabold text-slate-900">Evolución trimestral</h3><p class="text-xs text-slate-500">Ingresos frente a compras y gastos deducibles</p></div><span id="dash-chart-anio-badge" class="text-xs rounded-full bg-blue-50 text-blue-700 px-3 py-1 font-bold">2026</span></div>
                         <div class="chart-wrap"><canvas id="chartTrimestres"></canvas></div>
                     </article>
                     <article class="app-card p-4 sm:p-5">
@@ -610,6 +610,7 @@
                     </div>
                 </div>
 
+                <input type="hidden" id="comp-id-edicion" value="">
                 <input type="hidden" id="comp-tipo" value="factura">
                 <div class="grid grid-cols-2 gap-2">
                     <div><label class="block text-xs font-bold text-slate-600">Fecha *</label><input type="date" id="comp-fecha" class="w-full border rounded-xl p-2.5 text-sm" required onchange="autoTrimestre('comp-fecha', 'comp-trimestre')"></div>
