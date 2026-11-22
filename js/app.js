@@ -22,6 +22,12 @@ import {
     renderAnalisisEconomicoCharts
 } from './charts.js';
 
+import {
+    generarHuellaVerifactu,
+    descargarXMLFacturae,
+    generarQRTributarioSVG
+} from './einvoice.js';
+
 let state = getDefaultState();
 let iaeSeleccionadoOnboarding = null;
 let volverAFactura = false;
@@ -349,7 +355,8 @@ function renderIngresos() {
                 <td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${badgeClass}">${i.estado.toUpperCase()}</span></td>
                 <td class="px-3 py-2.5 text-center whitespace-nowrap">
                     ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="text-emerald-600 px-1.5" title="Cobrar"><i class="fa-solid fa-check-circle"></i></button>` : ''}
-                    <button onclick="generarFacturaPDF(${i.id})" class="text-blue-600 px-1.5" title="PDF"><i class="fa-solid fa-file-pdf"></i></button>
+                    <button onclick="generarFacturaPDF(${i.id})" class="text-blue-600 hover:text-blue-800 px-1.5" title="Factura PDF + QR"><i class="fa-solid fa-file-pdf"></i></button>
+                    <button onclick="exportarFacturaXML(${i.id})" class="text-indigo-600 hover:text-indigo-800 px-1.5 font-bold text-[11px]" title="Descargar XML Facturae 3.2.2">XML</button>
                     <button onclick="deleteIngreso(${i.id})" class="text-rose-600 px-1.5"><i class="fa-solid fa-trash"></i></button>
                 </td>
             </tr>`;
@@ -370,6 +377,7 @@ function renderIngresos() {
                 <div class="flex gap-2 pt-2 border-t">
                     ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold"><i class="fa-solid fa-check mr-1"></i>Cobrar</button>` : ''}
                     <button onclick="generarFacturaPDF(${i.id})" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>
+                    <button onclick="exportarFacturaXML(${i.id})" class="flex-1 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold"><i class="fa-solid fa-code mr-1"></i>Facturae XML</button>
                     <button onclick="deleteIngreso(${i.id})" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </article>`;
@@ -714,7 +722,7 @@ function actualizarTotalesFactura() {
     return { base, iva, ret, irpfPct, total };
 }
 
-function saveIngreso(e) {
+async function saveIngreso(e) {
     e.preventDefault();
     const c = state.clientes.find(x => String(x.id) === document.getElementById('ing-cliente').value);
     if (!c) return;
@@ -727,14 +735,22 @@ function saveIngreso(e) {
         precio: Number(el.querySelector('[data-campo="precio"]').value) || 0,
         iva: Number(el.querySelector('[data-campo="iva"]').value) || 0
     }));
-    state.ingresos.push({
+
+    const nuevaFactura = {
         id: Date.now(), numero: document.getElementById('ing-numero').value, fecha,
         clienteId: c.id, cliente: c.nombre, nif: c.nif, clienteDireccion: c.direccion || '',
         trimestre: parseInt(document.getElementById('ing-trimestre').value),
         lineas: lineasCapturadas,
         base: t.base, iva: t.iva, retencion: t.ret, retencionPct: t.irpfPct, total: t.total, estado,
         movimientosPago: estado === 'cobrado' ? [{ id: Date.now(), fecha, importe: t.total }] : []
-    });
+    };
+
+    // Encadenamiento criptográfico Veri*factu (SHA-256 con factura previa)
+    const ultimaFactura = state.ingresos[state.ingresos.length - 1];
+    const hashPrevio = ultimaFactura?.verifactu?.hashActual || '0000000000000000000000000000000000000000000000000000000000000000';
+    nuevaFactura.verifactu = await generarHuellaVerifactu(nuevaFactura, state.perfil, hashPrevio);
+
+    state.ingresos.push(nuevaFactura);
     closeIngresoModal();
     saveStorage();
 }
@@ -908,6 +924,68 @@ function descargarImpresoPDF() {
     html2pdf().from(el).save(`Borrador_${document.getElementById('aeat-model-select').value}_2026.pdf`);
 }
 
+function obtenerSiluetaCiudadSVG(ciudadRaw, colorAcento) {
+    const c = String(ciudadRaw || '').toLowerCase();
+    // Terrassa: Chimenea industrial Vapor Aymerich / Masia Freixa
+    if (c.includes('terrassa')) {
+        return `<svg viewBox="0 0 220 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
+            <!-- Chimenea textil emblemática de Terrassa (Vapor Aymerich) -->
+            <path d="M58 510 L70 110 L86 110 L98 510 Z" fill="${colorAcento}" opacity="0.88"/>
+            <rect x="66" y="102" width="24" height="10" rx="2" fill="${colorAcento}"/>
+            <rect x="68" y="122" width="20" height="4" fill="#ffffff" opacity="0.45"/>
+            <rect x="65" y="210" width="26" height="5" fill="${colorAcento}"/>
+            <rect x="62" y="320" width="32" height="5" fill="${colorAcento}"/>
+            <!-- Arcos parabólicos inspirados en Masia Freixa -->
+            <path d="M12 510 Q42 405 78 510" fill="none" stroke="${colorAcento}" stroke-width="5" opacity="0.65"/>
+            <path d="M78 510 Q125 385 172 510" fill="none" stroke="${colorAcento}" stroke-width="6" opacity="0.75"/>
+            <path d="M26 510 Q50 435 78 510" fill="${colorAcento}" opacity="0.16"/>
+            <path d="M90 510 Q125 415 160 510" fill="${colorAcento}" opacity="0.22"/>
+            <!-- Naves modernistas diente de sierra -->
+            <path d="M105 445 L105 410 L132 435 L132 410 L160 435 L160 410 L188 435 L188 510 L105 510 Z" fill="${colorAcento}" opacity="0.35"/>
+        </svg>`;
+    }
+    // Barcelona: Torres Sagrada Familia
+    if (c.includes('barcelona')) {
+        return `<svg viewBox="0 0 220 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
+            <path d="M45 510 L58 140 L66 115 L74 140 L87 510 Z" fill="${colorAcento}" opacity="0.85"/>
+            <path d="M92 510 L106 90 L115 60 L124 90 L138 510 Z" fill="${colorAcento}" opacity="0.92"/>
+            <path d="M142 510 L154 155 L162 130 L170 155 L182 510 Z" fill="${colorAcento}" opacity="0.80"/>
+            <circle cx="115" cy="52" r="6" fill="${colorAcento}"/>
+            <path d="M35 510 L35 370 Q115 320 195 370 L195 510 Z" fill="${colorAcento}" opacity="0.25"/>
+        </svg>`;
+    }
+    // Madrid: Puerta de Alcalá / Torres
+    if (c.includes('madrid')) {
+        return `<svg viewBox="0 0 220 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
+            <path d="M40 510 L40 240 L75 180 L110 240 L110 510 Z" fill="${colorAcento}" opacity="0.85"/>
+            <path d="M120 510 L120 150 L155 110 L190 150 L190 510 Z" fill="${colorAcento}" opacity="0.72"/>
+            <path d="M20 510 L20 390 L200 390 L200 510 Z" fill="${colorAcento}" opacity="0.30"/>
+            <path d="M45 510 L45 435 A22 22 0 0 1 89 435 L89 510 Z" fill="#ffffff" opacity="0.75"/>
+            <path d="M125 510 L125 435 A22 22 0 0 1 169 435 L169 510 Z" fill="#ffffff" opacity="0.75"/>
+        </svg>`;
+    }
+    // Skyline arquitectónico mediterráneo genérico elegante (para cualquier ciudad)
+    return `<svg viewBox="0 0 220 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
+        <!-- Torre campanario / reloj municipal estilizada -->
+        <path d="M56 510 L64 145 L88 145 L96 510 Z" fill="${colorAcento}" opacity="0.86"/>
+        <polygon points="60,145 76,95 92,145" fill="${colorAcento}"/>
+        <circle cx="76" cy="175" r="8" fill="#ffffff" opacity="0.85"/>
+        <!-- Edificios históricos con tejados a dos aguas y arcos -->
+        <path d="M16 510 L16 360 L54 330 L92 360 L92 510 Z" fill="${colorAcento}" opacity="0.45"/>
+        <path d="M98 510 L98 315 L142 280 L186 315 L186 510 Z" fill="${colorAcento}" opacity="0.62"/>
+        <path d="M122 510 L122 435 A20 20 0 0 1 162 435 L162 510 Z" fill="#ffffff" opacity="0.7"/>
+        <path d="M36 510 L36 445 A16 16 0 0 1 68 445 L68 510 Z" fill="#ffffff" opacity="0.7"/>
+    </svg>`;
+}
+
+
+function exportarFacturaXML(id) {
+    const f = state.ingresos.find(x => x.id === id);
+    if (!f) return;
+    const cli = state.clientes.find(c => String(c.id) === String(f.clienteId)) || {};
+    descargarXMLFacturae(f, state.perfil, cli);
+}
+
 function generarFacturaPDF(id) {
     const f = state.ingresos.find(x => x.id === id);
     if (!f) return;
@@ -916,7 +994,7 @@ function generarFacturaPDF(id) {
         ? f.lineas
         : [{ descripcion: 'Prestación de servicios profesionales / actividad económica', cantidad: 1, precio: f.base, iva: f.base > 0 ? Math.round((f.iva / f.base) * 100) : 21 }];
 
-    // Desglose de IVA por tipos (requisito Art. 6.1.h RD 1619/2012)
+    // Desglose legal de IVA por tipos (Art. 6.1.h RD 1619/2012)
     const desgloseIva = {};
     lineas.forEach(l => {
         const sub = (Number(l.cantidad) || 1) * (Number(l.precio) || 0);
@@ -929,21 +1007,25 @@ function generarFacturaPDF(id) {
     const filasConceptos = lineas.map(l => {
         const sub = (Number(l.cantidad) || 1) * (Number(l.precio) || 0);
         return `<tr>
-            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;">${l.descripcion}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${Number(l.cantidad).toLocaleString('es-ES')}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${formatEur(l.precio)}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${l.iva}%</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:bold;">${formatEur(sub)}</td>
+            <td class="col-cant">${Number(l.cantidad).toLocaleString('es-ES')}</td>
+            <td class="col-desc">${l.descripcion} <span class="iva-tag">(IVA ${l.iva}%)</span></td>
+            <td class="col-num">${formatEur(l.precio)}</td>
+            <td class="col-num font-bold">${formatEur(sub)}</td>
         </tr>`;
     }).join('');
 
     const filasDesglose = Object.entries(desgloseIva).map(([tipo, vals]) => `
         <tr>
-            <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;">${formatEur(vals.base)}</td>
-            <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;">${tipo}%</td>
-            <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${formatEur(vals.cuota)}</td>
+            <td>Base ${tipo}%: ${formatEur(vals.base)}</td>
+            <td style="text-align:right;">Cuota: ${formatEur(vals.cuota)}</td>
         </tr>
     `).join('');
+
+    const nombreEmisor = state.perfil.nombre || 'Mi Actividad Profesional';
+    const iniciales = nombreEmisor.split(' ').filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join('');
+    const colorPizarra = '#5c7684';
+    const ciudadActual = state.perfil.ciudad || 'España';
+    const siluetaCiudad = obtenerSiluetaCiudadSVG(ciudadActual, colorPizarra);
 
     const w = window.open('', '_blank');
     if (!w) { alert('Permite las ventanas emergentes para visualizar e imprimir la factura.'); return; }
@@ -952,107 +1034,397 @@ function generarFacturaPDF(id) {
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Factura ${f.numero}</title>
+<title>Factura ${f.numero} - ${nombreEmisor}</title>
 <style>
-    @page { size: A4; margin: 16mm; }
+    @page { size: A4 portrait; margin: 0; }
     * { box-sizing: border-box; }
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #0f172a; font-size: 11px; line-height: 1.45; margin: 0; padding: 20px; }
-    .container { max-width: 800px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1e3a8a; padding-bottom: 16px; margin-bottom: 22px; }
-    .title { font-size: 26px; font-weight: 900; color: #1e3a8a; letter-spacing: 0.5px; margin: 0; }
-    .meta { text-align: right; font-size: 11px; }
-    .meta p { margin: 2px 0; }
-    .parties { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
-    .box { width: 48%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; }
-    .box-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; margin-bottom: 6px; }
-    .box h3 { margin: 0 0 4px 0; font-size: 13px; color: #0f172a; }
-    .box p { margin: 2px 0; color: #334155; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th { background: #1e3a8a; color: white; font-size: 10px; text-transform: uppercase; padding: 8px; text-align: left; }
-    .bottom-grid { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-top: 10px; }
-    .tax-table { width: 45%; font-size: 10px; }
-    .tax-table th { background: #e2e8f0; color: #1e293b; }
-    .totals { width: 45%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; }
-    .tot-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
-    .tot-final { display: flex; justify-content: space-between; border-top: 2px solid #1e3a8a; margin-top: 8px; padding-top: 8px; font-size: 16px; font-weight: 900; color: #1e3a8a; }
-    .payment-box { margin-top: 24px; padding: 10px 12px; border-left: 4px solid #0284c7; background: #f0f9ff; font-size: 10.5px; }
-    .legal-footer { margin-top: 36px; padding-top: 10px; border-top: 1px solid #cbd5e1; font-size: 9px; color: #64748b; text-align: center; }
-    @media print { body { padding: 0; } .no-print { display: none; } }
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: #e2e8f0;
+        font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+        color: #334155;
+        font-size: 11px;
+        line-height: 1.5;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    .page-a4 {
+        position: relative;
+        width: 210mm;
+        height: 297mm;
+        margin: 15px auto;
+        background: #ffffff;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+        overflow: hidden;
+    }
+    /* Ilustración arquitectónica lateral izquierda anclada al zócalo inferior */
+    .left-illustration {
+        position: absolute;
+        left: 6mm;
+        bottom: 9mm;
+        width: 54mm;
+        height: 142mm;
+        pointer-events: none;
+        z-index: 1;
+    }
+    .city-horizon-bg {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 9mm;
+        height: 42mm;
+        background-image: repeating-linear-gradient(
+            90deg,
+            rgba(92, 118, 132, 0.035) 0px,
+            rgba(92, 118, 132, 0.035) 38px,
+            transparent 38px,
+            transparent 46px
+        );
+        border-top: 1px dashed rgba(92, 118, 132, 0.14);
+        pointer-events: none;
+        z-index: 0;
+    }
+    /* Zócalo sólido al borde inferior de la hoja */
+    .bottom-plinth {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 9mm;
+        background: ${colorPizarra};
+        z-index: 4;
+    }
+
+    /* Contenedor superior: empieza arriba y ocupa el cuerpo natural sin centrarse */
+    .top-body {
+        position: relative;
+        z-index: 2;
+        padding: 16mm 18mm 0 18mm;
+    }
+    .letterhead {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding-bottom: 13px;
+        border-bottom: 1px solid #cbd5e1;
+        margin-bottom: 22px;
+    }
+    .monogram {
+        width: 46px;
+        height: 46px;
+        border: 1.5px solid ${colorPizarra};
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 17px;
+        font-weight: bold;
+        color: ${colorPizarra};
+        letter-spacing: 1px;
+        flex-shrink: 0;
+    }
+    .brand-info h1 {
+        margin: 0;
+        font-size: 19px;
+        font-weight: 600;
+        color: ${colorPizarra};
+        letter-spacing: 0.3px;
+    }
+    .brand-info p {
+        margin: 2px 0 0 0;
+        font-size: 10.5px;
+        color: #64748b;
+    }
+    .doc-badge {
+        margin-left: auto;
+        text-align: right;
+    }
+    .doc-badge span {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: ${colorPizarra};
+        border: 1.5px solid ${colorPizarra};
+        padding: 4px 12px;
+        border-radius: 3px;
+    }
+
+    /* Bloque de datos y tabla */
+    .main-grid {
+        padding-left: 34mm;
+    }
+    .meta-parties {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .client-block {
+        width: 54%;
+    }
+    .section-label {
+        font-size: 10.5px;
+        font-weight: 700;
+        color: ${colorPizarra};
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .client-block p {
+        margin: 2px 0;
+        font-size: 11px;
+        color: #334155;
+    }
+    .invoice-meta {
+        width: 44%;
+        font-size: 11px;
+    }
+    .meta-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 0;
+        border-bottom: 1px dotted #e2e8f0;
+    }
+    .meta-row span:first-child {
+        color: ${colorPizarra};
+        font-weight: 600;
+    }
+    .meta-row span:last-child {
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    table.items {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 18px;
+    }
+    table.items th {
+        color: ${colorPizarra};
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 8px 6px;
+        border-bottom: 1.5px solid ${colorPizarra};
+        text-align: left;
+    }
+    table.items td {
+        padding: 9px 6px;
+        border-bottom: 1px solid #f1f5f9;
+        color: #334155;
+        vertical-align: top;
+    }
+    .col-cant { width: 12%; text-align: left; }
+    .col-desc { width: 52%; }
+    .col-num { width: 18%; text-align: right !important; white-space: nowrap; }
+    .iva-tag { font-size: 9.5px; color: #94a3b8; margin-left: 4px; }
+    .font-bold { font-weight: 700; color: #0f172a; }
+
+    .totals-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-top: 8px;
+    }
+    .iva-breakdown {
+        width: 48%;
+        font-size: 9.5px;
+        color: #64748b;
+    }
+    .iva-breakdown table { width: 100%; border-collapse: collapse; }
+    .iva-breakdown td { padding: 2px 0; }
+
+    .totals-box {
+        width: 48%;
+    }
+    .tot-line {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 6px;
+        font-size: 11px;
+    }
+    .tot-line span:first-child {
+        color: ${colorPizarra};
+        font-weight: 600;
+    }
+    .tot-line span:last-child {
+        font-weight: 700;
+        color: #1e293b;
+    }
+    .tot-grand {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 6px;
+        margin-top: 4px;
+        border-top: 1.5px solid ${colorPizarra};
+        font-size: 14px;
+        font-weight: 800;
+    }
+    .tot-grand span:first-child { color: ${colorPizarra}; }
+    .tot-grand span:last-child { color: #0f172a; }
+
+    .signature-area {
+        margin-top: 22px;
+        text-align: right;
+        padding-right: 10px;
+    }
+    .signature-script {
+        font-family: 'Brush Script MT', 'Segoe Script', Georgia, cursive;
+        font-size: 25px;
+        color: #1e293b;
+        transform: rotate(-3deg);
+        display: inline-block;
+        border-bottom: 1px solid #cbd5e1;
+        padding: 0 14px 2px;
+    }
+    .signature-caption {
+        font-size: 9px;
+        color: #94a3b8;
+        margin-top: 3px;
+    }
+
+    /* BLOQUE INFERIOR FIJO EN EL BOTTOM DE LA HOJA A4 */
+    .bottom-docked-footer {
+        position: absolute;
+        left: 52mm;
+        right: 18mm;
+        bottom: 13mm;
+        z-index: 3;
+        border-top: 1px solid #cbd5e1;
+        padding-top: 10px;
+        font-size: 10px;
+    }
+    .payment-grid {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 8px;
+    }
+    .payment-col h4 {
+        margin: 0 0 3px 0;
+        color: ${colorPizarra};
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .payment-col p {
+        margin: 1.5px 0;
+        color: #475569;
+    }
+    .legal-note {
+        margin: 6px 0 0 0;
+        padding-top: 6px;
+        border-top: 1px dashed #e2e8f0;
+        font-size: 8.5px;
+        color: #64748b;
+        line-height: 1.35;
+    }
+
+    @media print {
+        body { background: white; }
+        .page-a4 { margin: 0; box-shadow: none; width: 210mm; height: 297mm; }
+    }
 </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <div>
-            <h1 class="title">FACTURA</h1>
-            <p style="margin:4px 0 0 0;font-weight:bold;font-size:13px;">Serie / Número: ${f.numero}</p>
-        </div>
-        <div class="meta">
-            <p><strong>Fecha de expedición:</strong> ${fechaLocal(f.fecha)}</p>
-            <p><strong>Fecha de operación:</strong> ${fechaLocal(f.fecha)}</p>
-            <p><strong>Trimestre fiscal:</strong> ${f.trimestre}T / 2026</p>
-            <p><strong>Estado:</strong> ${f.estado.toUpperCase()}</p>
+<div class="page-a4">
+    <div class="city-horizon-bg"></div>
+    <div class="left-illustration">${siluetaCiudad}</div>
+
+    <!-- PARTE SUPERIOR Y CUERPO (EMPIEZA ARRIBA) -->
+    <div class="top-body">
+        <header class="letterhead">
+            <div class="monogram">${iniciales}</div>
+            <div class="brand-info">
+                <h1>${nombreEmisor}</h1>
+                <p>NIF: ${state.perfil.nif || '—'} &nbsp;·&nbsp; ${state.perfil.direccion || ciudadActual}</p>
+                <p>${state.perfil.telefono ? 'Tel. ' + state.perfil.telefono + ' · ' : ''}${state.perfil.iae || 'Actividad Económica'}</p>
+            </div>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+                <div style="text-align:right;">
+                    <div class="doc-badge"><span>Factura</span></div>
+                    <div style="font-size:8px;color:#64748b;margin-top:4px;font-weight:600;">QR Tributario · Veri*factu</div>
+                </div>
+                <div style="width:54px;height:54px;border:1px solid #cbd5e1;padding:2px;background:#fff;border-radius:4px;">
+                    ${generarQRTributarioSVG(f.verifactu?.urlCotejoAEAT || ('AEAT|' + (state.perfil.nif||'') + '|' + f.numero + '|' + f.total))}
+                </div>
+            </div>
+        </header>
+
+        <div class="main-grid">
+            <div class="meta-parties">
+                <div class="client-block">
+                    <div class="section-label">Facturar a</div>
+                    <p class="font-bold" style="font-size:12px;">${cli.nombre || f.cliente}</p>
+                    <p>NIF / CIF: ${cli.nif || f.nif || '—'}</p>
+                    <p>${cli.direccion || f.clienteDireccion || ''}</p>
+                    <p>${cli.email || ''}</p>
+                </div>
+                <div class="invoice-meta">
+                    <div class="meta-row"><span>Nº de factura</span><span>${f.numero}</span></div>
+                    <div class="meta-row"><span>Fecha expedición</span><span>${fechaLocal(f.fecha)}</span></div>
+                    <div class="meta-row"><span>Fecha operación</span><span>${fechaLocal(f.fecha)}</span></div>
+                    <div class="meta-row"><span>Trimestre fiscal</span><span>${f.trimestre}T · 2026</span></div>
+                </div>
+            </div>
+
+            <table class="items">
+                <thead>
+                    <tr>
+                        <th class="col-cant">Cant.</th>
+                        <th class="col-desc">Descripción</th>
+                        <th class="col-num">Precio unitario</th>
+                        <th class="col-num">Importe</th>
+                    </tr>
+                </thead>
+                <tbody>${filasConceptos}</tbody>
+            </table>
+
+            <div class="totals-section">
+                <div class="iva-breakdown">
+                    <div style="font-weight:700;color:${colorPizarra};margin-bottom:3px;">Desglose fiscal</div>
+                    <table>${filasDesglose}</table>
+                </div>
+                <div class="totals-box">
+                    <div class="tot-line"><span>Subtotal</span><span>${formatEur(f.base)}</span></div>
+                    <div class="tot-line"><span>IVA repercutido</span><span>${formatEur(f.iva)}</span></div>
+                    ${Number(f.retencion) > 0 ? `<div class="tot-line"><span>Retención IRPF (${f.retencionPct || 15}%)</span><span style="color:#be123c;">-${formatEur(f.retencion)}</span></div>` : ''}
+                    <div class="tot-grand"><span>Total Factura</span><span>${formatEur(f.total)}</span></div>
+                </div>
+            </div>
+
+            <div class="signature-area">
+                <div class="signature-script">${nombreEmisor}</div>
+                <div class="signature-caption">Sello y firma del expedidor</div>
+            </div>
         </div>
     </div>
 
-    <div class="parties">
-        <div class="box">
-            <div class="box-label">Datos del Expedidor (Emisor)</div>
-            <h3>${state.perfil.nombre || 'Autónomo'}</h3>
-            <p><strong>NIF / NIE:</strong> ${state.perfil.nif || '—'}</p>
-            <p><strong>Domicilio Fiscal:</strong> ${state.perfil.direccion || state.perfil.ciudad || '—'}</p>
-            <p><strong>Teléfono:</strong> ${state.perfil.telefono || '—'}</p>
-            <p><strong>Epígrafe IAE:</strong> ${state.perfil.iaeCodigo || 'Régimen General'}</p>
+    <!-- PARTE INFERIOR ANCLADA AL BOTTOM DEL A4 -->
+    <footer class="bottom-docked-footer">
+        <div class="payment-grid">
+            <div class="payment-col">
+                <h4>Condiciones y forma de pago</h4>
+                <p>Transferencia bancaria · Vencimiento a 30 días.</p>
+                <p><strong>Titular:</strong> ${nombreEmisor}</p>
+            </div>
+            <div class="payment-col" style="text-align:right;">
+                <h4>Datos bancarios</h4>
+                <p><strong>IBAN:</strong> <span style="font-family:monospace;">${state.perfil.iban || 'No especificado en perfil'}</span></p>
+                <p><strong>Ref. pago:</strong> ${f.numero}</p>
+            </div>
         </div>
-        <div class="box">
-            <div class="box-label">Datos del Destinatario (Cliente)</div>
-            <h3>${cli.nombre || f.cliente}</h3>
-            <p><strong>NIF / CIF:</strong> ${cli.nif || f.nif || '—'}</p>
-            <p><strong>Domicilio:</strong> ${cli.direccion || f.clienteDireccion || '—'}</p>
-            <p><strong>Contacto:</strong> ${cli.telefono || ''} ${cli.email ? '· ' + cli.email : ''}</p>
-        </div>
-    </div>
+        <p class="legal-note">
+            Factura expedida conforme al RD 1619/2012 y trazabilidad RD 1007/2023 (Veri*factu).
+            ${f.verifactu ? `<br><span style="font-family:monospace;font-size:7.5px;color:#475569;">Huella SHA-256: ${f.verifactu.hashActual}</span>` : ''}
+        </p>
+    </footer>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Descripción de las operaciones</th>
-                <th style="text-align:right;">Cantidad</th>
-                <th style="text-align:right;">Precio Unit.</th>
-                <th style="text-align:right;">Tipo IVA</th>
-                <th style="text-align:right;">Base Imponible</th>
-            </tr>
-        </thead>
-        <tbody>${filasConceptos}</tbody>
-    </table>
-
-    <div class="bottom-grid">
-        <table class="tax-table">
-            <thead>
-                <tr>
-                    <th>Base Imponible</th>
-                    <th>% IVA</th>
-                    <th style="text-align:right;">Cuota IVA</th>
-                </tr>
-            </thead>
-            <tbody>${filasDesglose}</tbody>
-        </table>
-
-        <div class="totals">
-            <div class="tot-row"><span>Total Base Imponible:</span><strong>${formatEur(f.base)}</strong></div>
-            <div class="tot-row"><span>Total Cuota IVA:</span><strong>${formatEur(f.iva)}</strong></div>
-            ${Number(f.retencion) > 0 ? `<div class="tot-row" style="color:#be123c;"><span>Retención IRPF (${f.retencionPct || 15}%):</span><strong>-${formatEur(f.retencion)}</strong></div>` : ''}
-            <div class="tot-final"><span>TOTAL FACTURA:</span><span>${formatEur(f.total)}</span></div>
-        </div>
-    </div>
-
-    <div class="payment-box">
-        <strong>Forma de pago:</strong> Transferencia bancaria &nbsp;|&nbsp; <strong>Cuenta IBAN:</strong> <span style="font-family:monospace;">${state.perfil.iban || 'Consultar con el emisor'}</span>
-    </div>
-
-    <div class="legal-footer">
-        Factura expedida conforme al Real Decreto 1619/2012, de 30 de noviembre, por el que se aprueba el Reglamento por el que se regulan las obligaciones de facturación (Agencia Estatal de Administración Tributaria).
-    </div>
+    <div class="bottom-plinth"></div>
 </div>
 <script>window.onload = function() { setTimeout(function(){ window.print(); }, 250); };<\/script>
 </body>
@@ -1107,6 +1479,7 @@ Object.assign(window, {
     deleteIngreso,
     marcarCobradoRapido,
     generarFacturaPDF,
+    exportarFacturaXML,
     openClienteModal,
     closeClienteModal,
     saveCliente,
