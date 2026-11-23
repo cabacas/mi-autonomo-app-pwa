@@ -389,6 +389,7 @@ function renderIngresos() {
                 <td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${estadoTexto}</span></td>
                 <td class="px-3 py-2.5 text-center whitespace-nowrap">
                     ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="text-emerald-600 px-1.5" title="Marcar cobrada"><i class="fa-solid fa-check-circle"></i></button>` : ''}
+                    <button onclick="verFacturaEmitida(${i.id})" class="text-slate-700 hover:text-blue-700 px-1.5" title="Consultar detalle"><i class="fa-solid fa-eye"></i></button>
                     <button onclick="generarFacturaPDF(${i.id})" class="text-blue-600 hover:text-blue-800 px-1.5" title="Factura PDF + QR"><i class="fa-solid fa-file-pdf"></i></button>
                     <button onclick="exportarFacturaXML(${i.id})" class="text-indigo-600 hover:text-indigo-800 px-1.5 font-bold text-[11px]" title="XML Facturae 3.2.2">XML</button>
                     ${!esRect ? `<button onclick="emitirRectificativa(${i.id})" class="text-rose-600 hover:text-rose-800 px-1.5" title="Emitir Factura Rectificativa (Veri*factu)"><i class="fa-solid fa-file-circle-minus"></i></button>` : ''}
@@ -413,12 +414,113 @@ function renderIngresos() {
                 </div>
                 <div class="flex gap-2 pt-2 border-t">
                     ${pend > 0 ? `<button onclick="marcarCobradoRapido(${i.id})" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold"><i class="fa-solid fa-check mr-1"></i>Cobrar</button>` : ''}
+                    <button onclick="verFacturaEmitida(${i.id})" class="py-2 px-3 rounded-xl bg-slate-100 text-slate-800 text-xs font-bold"><i class="fa-solid fa-eye mr-1"></i>Ver</button>
                     <button onclick="generarFacturaPDF(${i.id})" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>
                     <button onclick="exportarFacturaXML(${i.id})" class="flex-1 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold"><i class="fa-solid fa-code mr-1"></i>XML</button>
                     ${!esRect ? `<button onclick="emitirRectificativa(${i.id})" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold" title="Rectificativa"><i class="fa-solid fa-file-circle-minus"></i></button>` : ''}
                 </div>
             </article>`;
     });
+}
+
+
+function verFacturaEmitida(id) {
+    const f = state.ingresos.find(x => String(x.id) === String(id));
+    if (!f) return;
+    const esRect = f.tipoDocumento === 'rectificativa';
+    const pend = esRect ? 0 : importePendiente(f);
+
+    const badgeEl = document.getElementById('ver-fra-badge');
+    badgeEl.textContent = esRect ? 'FACTURA RECTIFICATIVA' : (f.estado === 'cobrado' ? 'COBRADA' : 'PENDIENTE DE COBRO');
+    badgeEl.className = `text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded ${esRect ? 'bg-rose-100 text-rose-800' : (f.estado === 'cobrado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}`;
+
+    document.getElementById('ver-fra-titulo').textContent = `${f.numero} · ${f.cliente}`;
+    document.getElementById('ver-fra-subtitulo').textContent = `Fecha: ${fechaLocal(f.fecha)} · Trimestre: ${f.trimestre}T · NIF Cliente: ${f.nif || '—'}`;
+
+    const lineas = Array.isArray(f.lineas) && f.lineas.length
+        ? f.lineas
+        : [{ descripcion: 'Operación registrada', cantidad: 1, precio: f.base, iva: 21 }];
+
+    const filasLineas = lineas.map(l => {
+        const cant = Number(l.cantidad) || 1;
+        const precio = Number(l.precio) || 0;
+        const sub = cant * precio;
+        return `<tr class="border-t">
+            <td class="p-2">${l.descripcion}</td>
+            <td class="p-2 text-right font-mono">${cant}</td>
+            <td class="p-2 text-right font-mono">${formatEur(precio)}</td>
+            <td class="p-2 text-center font-bold">${l.iva ?? 21}%</td>
+            <td class="p-2 text-right font-mono font-bold">${formatEur(sub)}</td>
+        </tr>`;
+    }).join('');
+
+    const pagosHtml = (f.movimientosPago && f.movimientosPago.length)
+        ? `<ul class="space-y-1">${f.movimientosPago.map(m => `<li class="flex justify-between text-emerald-800 bg-emerald-50 px-2.5 py-1.5 rounded-lg"><span>Cobro (${fechaLocal(m.fecha)})</span><strong>${formatEur(m.importe)}</strong></li>`).join('')}</ul>`
+        : `<p class="text-slate-400">${esRect ? 'Abono rectificativo sin cobro pendiente.' : 'Sin cobros registrados todavía.'}</p>`;
+
+    const vfHtml = f.verifactu
+        ? `<div class="rounded-xl bg-slate-900 text-slate-100 p-3 space-y-1.5 font-mono text-[10px] break-all">
+            <p class="text-amber-300 font-sans font-extrabold text-[11px] uppercase">Trazabilidad Veri*factu (SHA-256)</p>
+            <p><span class="text-slate-400">Huella actual:</span> ${f.verifactu.hashActual}</p>
+            <p><span class="text-slate-400">Huella previa:</span> ${f.verifactu.hashAnterior}</p>
+            <p><span class="text-slate-400">Generado:</span> ${f.verifactu.timestamp}</p>
+        </div>`
+        : `<p class="text-slate-400">Factura anterior al encadenamiento Veri*factu.</p>`;
+
+    document.getElementById('ver-fra-contenido').innerHTML = `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div class="rounded-xl border p-2.5 bg-slate-50"><span class="text-[10px] font-bold uppercase text-slate-400 block">Base Imp.</span><strong class="text-sm text-slate-900">${formatEur(f.base)}</strong></div>
+            <div class="rounded-xl border p-2.5 bg-slate-50"><span class="text-[10px] font-bold uppercase text-slate-400 block">IVA</span><strong class="text-sm text-indigo-700">${formatEur(f.iva)}</strong></div>
+            <div class="rounded-xl border p-2.5 bg-slate-50"><span class="text-[10px] font-bold uppercase text-slate-400 block">Ret. IRPF</span><strong class="text-sm text-rose-600">-${formatEur(Math.abs(Number(f.retencion) || 0))}</strong></div>
+            <div class="rounded-xl border p-2.5 bg-blue-50/60"><span class="text-[10px] font-bold uppercase text-blue-600 block">Total</span><strong class="text-sm font-black text-blue-800">${formatEur(f.total)}</strong></div>
+        </div>
+
+        ${f.motivoRectificacion ? `<div class="rounded-xl bg-rose-50 border border-rose-200 p-3 text-rose-900"><strong>Motivo rectificación:</strong> ${f.motivoRectificacion}</div>` : ''}
+
+        <div class="space-y-1.5">
+            <h4 class="font-extrabold uppercase text-slate-600 text-[11px]">Conceptos facturados</h4>
+            <div class="border rounded-xl overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-100 text-slate-700 text-[10px] uppercase"><tr><th class="p-2">Concepto</th><th class="p-2 text-right">Cant.</th><th class="p-2 text-right">Precio</th><th class="p-2 text-center">IVA</th><th class="p-2 text-right">Subtotal</th></tr></thead>
+                    <tbody>${filasLineas}</tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="rounded-xl border p-3 space-y-1.5">
+                <h4 class="font-extrabold uppercase text-slate-600 text-[11px]">Historial de Cobros</h4>
+                ${pagosHtml}
+            </div>
+            <div class="rounded-xl border p-3 space-y-1.5">
+                <h4 class="font-extrabold uppercase text-slate-600 text-[11px]">Estado y Pendiente</h4>
+                <p class="text-slate-700">Importe pendiente: <strong>${formatEur(pend)}</strong></p>
+                <p class="text-[11px] text-slate-400">Las facturas emitidas no se editan ni borran; cualquier corrección se hace mediante factura rectificativa.</p>
+            </div>
+        </div>
+
+        ${vfHtml}
+    `;
+
+    document.getElementById('ver-fra-footer').innerHTML = `
+        <div class="flex flex-wrap gap-2">
+            ${pend > 0 ? `<button type="button" onclick="cerrarModalVerFactura(); marcarCobradoRapido(${f.id});" class="px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-bold"><i class="fa-solid fa-check mr-1"></i>Marcar cobrada</button>` : ''}
+            <button type="button" onclick="generarFacturaPDF(${f.id})" class="px-3.5 py-2 rounded-xl bg-blue-600 text-white font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>PDF + QR</button>
+            <button type="button" onclick="exportarFacturaXML(${f.id})" class="px-3.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">XML Facturae</button>
+            ${!esRect ? `<button type="button" onclick="cerrarModalVerFactura(); emitirRectificativa(${f.id});" class="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 font-bold"><i class="fa-solid fa-file-circle-minus mr-1"></i>Rectificativa</button>` : ''}
+        </div>
+        <button type="button" onclick="cerrarModalVerFactura()" class="px-4 py-2 rounded-xl bg-white border text-slate-700 font-bold ml-auto">Cerrar</button>
+    `;
+
+    const modal = document.getElementById('modal-ver-factura');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function cerrarModalVerFactura() {
+    const modal = document.getElementById('modal-ver-factura');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
 }
 
 function marcarCobradoRapido(id) {
@@ -2683,6 +2785,8 @@ Object.assign(window, {
     actualizarTotalesFactura,
     saveIngreso,
     emitirRectificativa,
+    verFacturaEmitida,
+    cerrarModalVerFactura,
     marcarCobradoRapido,
     generarFacturaPDF,
     exportarFacturaXML,
