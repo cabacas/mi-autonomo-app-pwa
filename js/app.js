@@ -44,6 +44,8 @@ state.ejercicioActivo = 2026;
 
 function cambiarEjercicioGlobal(anio) {
     state.ejercicioActivo = Number(anio) || new Date().getFullYear();
+    const selD = document.getElementById('diario-filtro-anio');
+    if (selD) selD.value = String(state.ejercicioActivo);
     saveStorage();
 }
 let iaeSeleccionadoOnboarding = null;
@@ -558,14 +560,18 @@ function toggleCamposAmortizacion() {
     }
 }
 
-function renderDiarioContable() {
-    const anioAct = String(state.ejercicioActivo || 2026);
+function obtenerAsientosDiarioFiltrados() {
+    const selAnio = document.getElementById('diario-filtro-anio');
+    if (selAnio && !selAnio.dataset.sincronizado) {
+        selAnio.value = String(state.ejercicioActivo || 2026);
+        selAnio.dataset.sincronizado = '1';
+    }
+    const anioAct = String(selAnio?.value || state.ejercicioActivo || 2026);
     const trimFiltro = document.getElementById('diario-filtro-trimestre')?.value || '';
     const tipoFiltro = document.getElementById('diario-filtro-tipo')?.value || '';
 
     const asientos = [];
 
-    // 1. Facturas emitidas / rectificativas
     (state.ingresos || []).forEach(i => {
         if (!String(i.fecha || '').startsWith(anioAct)) return;
         const esRect = i.tipoDocumento === 'rectificativa';
@@ -583,7 +589,6 @@ function renderDiarioContable() {
             esEntrada: !esRect
         });
 
-        // Movimientos de cobro vinculados
         (i.movimientosPago || []).forEach(m => {
             if (!String(m.fecha || '').startsWith(anioAct)) return;
             const trimCobro = Math.ceil((new Date(m.fecha).getMonth() + 1) / 3);
@@ -603,7 +608,6 @@ function renderDiarioContable() {
         });
     });
 
-    // 2. Facturas recibidas y gastos/tickets
     (state.gastos || []).forEach(g => {
         if (!String(g.fecha || '').startsWith(anioAct)) return;
         const esGastoSimple = g.tipo === 'gasto';
@@ -622,7 +626,6 @@ function renderDiarioContable() {
             esEntrada: false
         });
 
-        // Movimientos de pago vinculados
         (g.movimientosPago || []).forEach(m => {
             if (!String(m.fecha || '').startsWith(anioAct)) return;
             const trimPago = Math.ceil((new Date(m.fecha).getMonth() + 1) / 3);
@@ -646,6 +649,58 @@ function renderDiarioContable() {
         .filter(a => (!trimFiltro || String(a.trimestre) === String(trimFiltro)))
         .filter(a => (!tipoFiltro || a.grupo === tipoFiltro))
         .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+
+    return { anioAct, trimFiltro, tipoFiltro, filtrados };
+}
+
+function imprimirDiarioContable() {
+    const { anioAct, trimFiltro, tipoFiltro, filtrados } = obtenerAsientosDiarioFiltrados();
+    const totalEntradas = filtrados.filter(a => a.esEntrada).reduce((s, a) => s + Math.abs(a.total), 0);
+    const totalSalidas = filtrados.filter(a => !a.esEntrada).reduce((s, a) => s + Math.abs(a.total), 0);
+    const titular = state.perfil.nombre || 'Autónomo';
+    const nif = state.perfil.nif || '';
+
+    const filas = filtrados.map(a => `
+        <tr>
+            <td>${fechaLocal(a.fecha)}</td>
+            <td style="text-align:center;">${a.trimestre}T</td>
+            <td>${a.tipoLabel}</td>
+            <td>${a.concepto}</td>
+            <td>${a.tercero}</td>
+            <td style="text-align:right;">${formatEur(a.base)}</td>
+            <td>${a.impuestosTxt}</td>
+            <td style="text-align:right;font-weight:bold;">${a.esEntrada ? '+' : '-'}${formatEur(Math.abs(a.total))}</td>
+        </tr>
+    `).join('');
+
+    const w = window.open('', '_blank');
+    if (!w) { alert('Permite las ventanas emergentes para imprimir el diario contable.'); return; }
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Diario Contable ${anioAct}</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 24px; font-size: 10.5px; }
+        .top { display: flex; justify-content: space-between; border-bottom: 2px solid #1e293b; padding-bottom: 10px; margin-bottom: 14px; }
+        h1 { margin: 0; font-size: 18px; }
+        .resumen { display: flex; gap: 24px; margin-bottom: 14px; font-size: 11px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f1f5f9; border-bottom: 1.5px solid #334155; padding: 6px; text-align: left; font-size: 9.5px; text-transform: uppercase; }
+        td { border-bottom: 1px solid #e2e8f0; padding: 6px; }
+    </style></head><body>
+    <div class="top">
+        <div><h1>DIARIO DE CONTABILIDAD · EJERCICIO ${anioAct}</h1><p>${titular}${nif ? ' · NIF: ' + nif : ''}</p></div>
+        <div style="text-align:right;"><p><strong>Trimestre:</strong> ${trimFiltro ? trimFiltro + 'T' : 'Todos'}</p><p><strong>Filtro:</strong> ${tipoFiltro || 'Todos los asientos'}</p></div>
+    </div>
+    <div class="resumen">
+        <span><strong>Asientos:</strong> ${filtrados.length}</span>
+        <span><strong>Entradas:</strong> ${formatEur(totalEntradas)}</span>
+        <span><strong>Salidas:</strong> ${formatEur(totalSalidas)}</span>
+    </div>
+    <table><thead><tr><th>Fecha</th><th>Trim.</th><th>Tipo</th><th>Documento / Concepto</th><th>Tercero</th><th style="text-align:right;">Base / Imp.</th><th>Impuestos / Nota</th><th style="text-align:right;">Total</th></tr></thead><tbody>${filas}</tbody></table>
+    <script>window.onload=()=>window.print();<\/script></body></html>`);
+    w.document.close();
+}
+
+function renderDiarioContable() {
+    const { filtrados } = obtenerAsientosDiarioFiltrados();
 
     const totalEntradas = filtrados.filter(a => a.esEntrada).reduce((s, a) => s + Math.abs(a.total), 0);
     const totalSalidas = filtrados.filter(a => !a.esEntrada).reduce((s, a) => s + Math.abs(a.total), 0);
@@ -2488,6 +2543,7 @@ Object.assign(window, {
     autoTrimestre,
     renderAnalisisEconomico: () => renderAnalisisEconomicoCharts(state),
     renderDiarioContable,
+    imprimirDiarioContable,
     toggleCamposAmortizacion,
     renderPosicionamiento,
     ejecutarRadarLocal,
