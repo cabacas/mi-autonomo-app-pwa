@@ -258,6 +258,7 @@ function switchTab(tabId) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (tabId === 'aeat') updateAEATView();
     if (tabId === 'analisis-economico') renderAnalisisEconomicoCharts(state);
+    if (tabId === 'diario-contable') renderDiarioContable();
     if (tabId === 'posicionamiento') renderPosicionamiento();
     if (tabId === 'presupuestos') renderPresupuestos();
 }
@@ -548,6 +549,153 @@ function marcarPagadoRapido(id) {
 }
 
 /* ================= MODALES COMPRA / GASTO / INGRESO / CLIENTE / PRESUPUESTO ================= */
+
+function toggleCamposAmortizacion() {
+    const chk = document.getElementById('comp-bien-inversion');
+    const panel = document.getElementById('comp-amortizacion-campos');
+    if (chk && panel) {
+        panel.classList.toggle('hidden', !chk.checked);
+    }
+}
+
+function renderDiarioContable() {
+    const anioAct = String(state.ejercicioActivo || 2026);
+    const trimFiltro = document.getElementById('diario-filtro-trimestre')?.value || '';
+    const tipoFiltro = document.getElementById('diario-filtro-tipo')?.value || '';
+
+    const asientos = [];
+
+    // 1. Facturas emitidas / rectificativas
+    (state.ingresos || []).forEach(i => {
+        if (!String(i.fecha || '').startsWith(anioAct)) return;
+        const esRect = i.tipoDocumento === 'rectificativa';
+        asientos.push({
+            fecha: i.fecha,
+            trimestre: i.trimestre,
+            grupo: 'ingreso',
+            tipoLabel: esRect ? 'RECTIFICATIVA' : 'FRA. EMITIDA',
+            badgeClass: esRect ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800',
+            concepto: `${i.numero}${esRect && i.facturaRectificadaNumero ? ' (Rect. ' + i.facturaRectificadaNumero + ')' : ''}`,
+            tercero: i.cliente,
+            base: Number(i.base) || 0,
+            impuestosTxt: `IVA ${formatEur(i.iva)} · IRPF ${formatEur(i.retencion || 0)}`,
+            total: Number(i.total) || 0,
+            esEntrada: !esRect
+        });
+
+        // Movimientos de cobro vinculados
+        (i.movimientosPago || []).forEach(m => {
+            if (!String(m.fecha || '').startsWith(anioAct)) return;
+            const trimCobro = Math.ceil((new Date(m.fecha).getMonth() + 1) / 3);
+            asientos.push({
+                fecha: m.fecha,
+                trimestre: trimCobro,
+                grupo: 'tesoreria',
+                tipoLabel: 'COBRO',
+                badgeClass: 'bg-blue-100 text-blue-800',
+                concepto: `Cobro fra. ${i.numero}`,
+                tercero: i.cliente,
+                base: Number(m.importe) || 0,
+                impuestosTxt: 'Tesorería',
+                total: Number(m.importe) || 0,
+                esEntrada: true
+            });
+        });
+    });
+
+    // 2. Facturas recibidas y gastos/tickets
+    (state.gastos || []).forEach(g => {
+        if (!String(g.fecha || '').startsWith(anioAct)) return;
+        const esGastoSimple = g.tipo === 'gasto';
+        const etiquetaBien = g.esBienInversion ? ` · Amort. ${g.vidaUtilAnios || 4}a` : '';
+        asientos.push({
+            fecha: g.fecha,
+            trimestre: g.trimestre,
+            grupo: 'compra',
+            tipoLabel: esGastoSimple ? 'GASTO / TICKET' : 'FRA. RECIBIDA',
+            badgeClass: esGastoSimple ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800',
+            concepto: `${g.numFactura ? g.numFactura + ' · ' : ''}${g.cat}${etiquetaBien}`,
+            tercero: g.proveedor,
+            base: Number(g.baseIrpf ?? g.baseIva ?? g.total) || 0,
+            impuestosTxt: esGastoSimple ? 'Sin IVA deducible' : `IVA ${formatEur(g.iva)}`,
+            total: Number(g.total) || 0,
+            esEntrada: false
+        });
+
+        // Movimientos de pago vinculados
+        (g.movimientosPago || []).forEach(m => {
+            if (!String(m.fecha || '').startsWith(anioAct)) return;
+            const trimPago = Math.ceil((new Date(m.fecha).getMonth() + 1) / 3);
+            asientos.push({
+                fecha: m.fecha,
+                trimestre: trimPago,
+                grupo: 'tesoreria',
+                tipoLabel: 'PAGO',
+                badgeClass: 'bg-slate-200 text-slate-800',
+                concepto: `Pago ${g.numFactura || g.proveedor}`,
+                tercero: g.proveedor,
+                base: Number(m.importe) || 0,
+                impuestosTxt: 'Tesorería',
+                total: Number(m.importe) || 0,
+                esEntrada: false
+            });
+        });
+    });
+
+    const filtrados = asientos
+        .filter(a => (!trimFiltro || String(a.trimestre) === String(trimFiltro)))
+        .filter(a => (!tipoFiltro || a.grupo === tipoFiltro))
+        .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+
+    const totalEntradas = filtrados.filter(a => a.esEntrada).reduce((s, a) => s + Math.abs(a.total), 0);
+    const totalSalidas = filtrados.filter(a => !a.esEntrada).reduce((s, a) => s + Math.abs(a.total), 0);
+
+    const elCount = document.getElementById('diario-total-asientos');
+    const elEnt = document.getElementById('diario-suma-entradas');
+    const elSal = document.getElementById('diario-suma-salidas');
+    if (elCount) elCount.textContent = String(filtrados.length);
+    if (elEnt) elEnt.textContent = formatEur(totalEntradas);
+    if (elSal) elSal.textContent = formatEur(totalSalidas);
+
+    const tbody = document.getElementById('tabla-diario-body');
+    const cardsMob = document.getElementById('cards-diario-mobile');
+    if (!tbody || !cardsMob) return;
+
+    if (!filtrados.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-xs text-slate-400">No hay asientos contables para el filtro seleccionado.</td></tr>';
+        cardsMob.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">No hay asientos contables para el filtro seleccionado.</p>';
+        return;
+    }
+
+    tbody.innerHTML = filtrados.map(a => `
+        <tr class="border-b hover:bg-slate-50">
+            <td class="px-3 py-2.5 font-mono text-xs">${fechaLocal(a.fecha)}</td>
+            <td class="px-3 py-2.5"><span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-bold">${a.trimestre}T</span></td>
+            <td class="px-3 py-2.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.badgeClass}">${a.tipoLabel}</span></td>
+            <td class="px-3 py-2.5 font-semibold text-slate-800">${a.concepto}</td>
+            <td class="px-3 py-2.5">${a.tercero}</td>
+            <td class="px-3 py-2.5 text-right font-mono">${formatEur(a.base)}</td>
+            <td class="px-3 py-2.5 text-right text-[11px] text-slate-500">${a.impuestosTxt}</td>
+            <td class="px-3 py-2.5 text-right font-extrabold ${a.esEntrada ? 'text-emerald-700' : 'text-rose-700'}">${a.esEntrada ? '+' : '-'}${formatEur(Math.abs(a.total))}</td>
+        </tr>
+    `).join('');
+
+    cardsMob.innerHTML = filtrados.map(a => `
+        <article class="app-card p-3.5 space-y-1.5">
+            <div class="flex justify-between items-center gap-2">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${a.badgeClass}">${a.tipoLabel}</span>
+                <span class="text-[11px] font-mono text-slate-500">${fechaLocal(a.fecha)} · ${a.trimestre}T</span>
+            </div>
+            <p class="font-bold text-slate-900 text-sm">${a.tercero}</p>
+            <p class="text-xs text-slate-500">${a.concepto}</p>
+            <div class="flex justify-between items-center pt-1 border-t text-xs">
+                <span class="text-slate-500">${a.impuestosTxt}</span>
+                <strong class="text-sm font-black ${a.esEntrada ? 'text-emerald-700' : 'text-rose-700'}">${a.esEntrada ? '+' : '-'}${formatEur(Math.abs(a.total))}</strong>
+            </div>
+        </article>
+    `).join('');
+}
+
 function editarCompra(id) {
     const item = state.gastos.find(g => String(g.id) === String(id));
     if (!item) return;
@@ -560,6 +708,9 @@ function editarCompra(id) {
     document.getElementById('comp-proveedor').value = item.proveedor || '';
     document.getElementById('comp-categoria').value = item.cat || CATEGORIAS_COMPRAS[0];
     document.getElementById('comp-estado').value = item.estado || 'pagado';
+    document.getElementById('comp-bien-inversion').checked = Boolean(item.esBienInversion);
+    document.getElementById('comp-vida-util').value = String(item.vidaUtilAnios || 4);
+    toggleCamposAmortizacion();
 
     if (tipo === 'factura') {
         document.getElementById('comp-num-factura').value = item.numFactura || '';
@@ -584,6 +735,9 @@ function openCompraModal(tipo = 'factura', mantenerArchivoOCR = false) {
     document.getElementById('comp-base').value = '';
     document.getElementById('comp-total-simple').value = '';
     document.getElementById('comp-archivo').value = '';
+    document.getElementById('comp-bien-inversion').checked = false;
+    document.getElementById('comp-vida-util').value = '4';
+    toggleCamposAmortizacion();
     const fb = document.getElementById('comp-nif-feedback');
     if (fb) fb.classList.add('hidden');
     if (!mantenerArchivoOCR) {
@@ -633,6 +787,8 @@ async function saveCompra(e) {
     const proveedor = document.getElementById('comp-proveedor').value.trim();
     const cat = document.getElementById('comp-categoria').value;
     const estado = document.getElementById('comp-estado').value;
+    const esBienInversion = Boolean(document.getElementById('comp-bien-inversion')?.checked);
+    const vidaUtilAnios = Math.max(1, parseInt(document.getElementById('comp-vida-util')?.value || '4', 10));
 
     let baseIva = 0, baseIrpf = 0, ivaPct = 0, iva = 0, total = 0;
     let numFactura = '', nifProveedor = '';
@@ -676,7 +832,7 @@ ${checkProv.mensaje}
 
     const datos = {
         id, tipo, numFactura, nifProveedor, fecha, trimestre, proveedor, cat,
-        baseIva, baseIrpf, ivaPct, iva, total, estado,
+        baseIva, baseIrpf, ivaPct, iva, total, estado, esBienInversion, vidaUtilAnios,
         adjuntoId, adjuntoNombre,
         movimientosPago: estado === 'pagado' ? [{ id, fecha, importe: total }] : []
     };
@@ -2138,6 +2294,94 @@ function renderPosicionamiento() {
     renderBenchmarkCharts(tusMetricas, bench);
 }
 
+let radarLeafletMap = null;
+let radarMarkersGroup = null;
+let radarMarkersByIndex = [];
+let radarUltimoBounds = null;
+
+function renderizarMapaRadar(res) {
+    const wrapper = document.getElementById('radar-mapa-wrapper');
+    const canvas = document.getElementById('radar-mapa-canvas');
+    if (!wrapper || !canvas || typeof window.L === 'undefined') return;
+
+    wrapper.classList.remove('hidden');
+
+    if (!radarLeafletMap) {
+        radarLeafletMap = window.L.map(canvas, { scrollWheelZoom: false }).setView([res.centroLat, res.centroLon], 11);
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(radarLeafletMap);
+        radarMarkersGroup = window.L.featureGroup().addTo(radarLeafletMap);
+    } else {
+        radarMarkersGroup.clearLayers();
+    }
+
+    radarMarkersByIndex = [];
+
+    // Marcador azul para el municipio base del autónomo
+    const iconoBase = window.L.divIcon({
+        className: '',
+        html: '<div style="width:28px;height:28px;border-radius:50%;background:#2563eb;color:#fff;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);display:grid;place-items:center;font-size:12px;"><i class="fa-solid fa-house"></i></div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+    window.L.marker([res.centroLat, res.centroLon], { icon: iconoBase })
+        .bindPopup(`<strong>Tu base: ${res.ciudadOficial}</strong><br><span style="font-size:11px;">${res.ambito || ''}</span>`)
+        .addTo(radarMarkersGroup);
+
+    // Marcadores rojos/ámbar para cada negocio detectado
+    const iconoNegocio = window.L.divIcon({
+        className: '',
+        html: '<div style="width:24px;height:24px;border-radius:50%;background:#e11d48;color:#fff;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:grid;place-items:center;font-size:10px;"><i class="fa-solid fa-briefcase"></i></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+
+    res.muestraNegocios.forEach((neg, idx) => {
+        if (Number.isFinite(neg.lat) && Number.isFinite(neg.lon)) {
+            const marker = window.L.marker([neg.lat, neg.lon], { icon: iconoNegocio })
+                .bindPopup(`
+                    <div style="min-width:160px;">
+                        <strong style="font-size:12px;color:#0f172a;">${neg.nombre}</strong>
+                        <div style="font-size:10px;color:#475569;text-transform:capitalize;margin-top:2px;">${neg.categoria}</div>
+                        <div style="font-size:10px;color:#64748b;margin-top:2px;">${neg.direccion}</div>
+                    </div>
+                `)
+                .addTo(radarMarkersGroup);
+            radarMarkersByIndex[idx] = marker;
+        }
+    });
+
+    // Ajustar encuadre del mapa para mostrar todos los marcadores
+    setTimeout(() => {
+        radarLeafletMap.invalidateSize();
+        const bounds = radarMarkersGroup.getBounds();
+        if (bounds && bounds.isValid()) {
+            radarUltimoBounds = bounds;
+            radarLeafletMap.fitBounds(bounds, { padding: [32, 32], maxZoom: 14 });
+        } else {
+            radarLeafletMap.setView([res.centroLat, res.centroLon], 11);
+        }
+    }, 80);
+}
+
+function enfocarNegocioEnMapa(idx) {
+    const marker = radarMarkersByIndex[idx];
+    const canvas = document.getElementById('radar-mapa-canvas');
+    if (!marker || !radarLeafletMap) return;
+    canvas?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const ll = marker.getLatLng();
+    radarLeafletMap.setView(ll, 15, { animate: true });
+    marker.openPopup();
+}
+
+function centrarMapaRadar() {
+    if (radarLeafletMap && radarUltimoBounds && radarUltimoBounds.isValid()) {
+        radarLeafletMap.fitBounds(radarUltimoBounds, { padding: [32, 32], maxZoom: 14 });
+    }
+}
+
 async function ejecutarRadarLocal() {
     const bench = obtenerBenchmarkSectorial(state.perfil, CATALOGO_IAE);
     const btn = document.getElementById('btn-radar-local');
@@ -2145,7 +2389,7 @@ async function ejecutarRadarLocal() {
     const grid = document.getElementById('radar-negocios-grid');
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Consultando registros...';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Geoposicionando...';
     badge.textContent = 'Consultando OpenStreetMap...';
     badge.className = 'text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1 rounded-full';
 
@@ -2158,18 +2402,20 @@ async function ejecutarRadarLocal() {
         badge.textContent = `${res.totalDetectados} en ${res.ambito || res.ciudadOficial}`;
         badge.className = 'text-xs font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full';
 
+        renderizarMapaRadar(res);
+
         if (res.muestraNegocios.length) {
-            grid.innerHTML = res.muestraNegocios.map(neg => `
-                <div class="border rounded-xl p-3 bg-slate-50 flex items-start gap-2.5">
-                    <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 grid place-items-center shrink-0 text-xs"><i class="fa-solid fa-building"></i></div>
+            grid.innerHTML = res.muestraNegocios.map((neg, idx) => `
+                <button type="button" onclick="enfocarNegocioEnMapa(${idx})" class="text-left border rounded-xl p-3 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition flex items-start gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 grid place-items-center shrink-0 text-xs"><i class="fa-solid fa-location-dot"></i></div>
                     <div class="min-w-0 flex-1">
                         <p class="font-bold text-xs text-slate-900 truncate">${neg.nombre}</p>
                         <p class="text-[10px] text-slate-500 capitalize truncate">${neg.categoria} · ${neg.direccion}</p>
                     </div>
-                </div>
+                </button>
             `).join('');
         } else {
-            grid.innerHTML = `<p class="text-xs text-slate-500 col-span-full py-3">Se detectaron ${res.totalDetectados} nodos de actividad en ${res.ciudadOficial}, aunque sin nombre comercial público registrado en el mapa.</p>`;
+            grid.innerHTML = `<p class="text-xs text-slate-500 col-span-full py-3">No se encontraron negocios etiquetados con ese término en ${res.ambito || res.ciudadOficial}.</p>`;
         }
     } catch (err) {
         badge.textContent = 'Error en consulta';
@@ -2177,7 +2423,7 @@ async function ejecutarRadarLocal() {
         grid.innerHTML = `<p class="text-xs text-rose-600 col-span-full py-3"><i class="fa-solid fa-triangle-exclamation mr-1"></i>${err.message}</p>`;
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-satellite-dish mr-1.5"></i> Actualizar Radar Ciudad';
+        btn.innerHTML = '<i class="fa-solid fa-satellite-dish mr-1.5"></i> Actualizar Radar Provincial';
     }
 }
 
@@ -2241,6 +2487,10 @@ Object.assign(window, {
     abrirAdjuntoIDB,
     autoTrimestre,
     renderAnalisisEconomico: () => renderAnalisisEconomicoCharts(state),
+    renderDiarioContable,
+    toggleCamposAmortizacion,
     renderPosicionamiento,
-    ejecutarRadarLocal
+    ejecutarRadarLocal,
+    enfocarNegocioEnMapa,
+    centrarMapaRadar
 });

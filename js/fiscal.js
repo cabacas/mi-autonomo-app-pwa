@@ -27,6 +27,45 @@ export function obtenerSaldoBancoActual(state) {
     return (Number(state.perfil.saldoInicialBanco) || 0) + calcularFlujoRegistrado(state);
 }
 
+
+/* ================= AMORTIZACIÓN DE BIENES DE INVERSIÓN (ESTIMACIÓN DIRECTA) ================= */
+export function calcularAmortizacionTrimestralBien(gasto, q, anioObjetivo) {
+    if (!gasto || !gasto.esBienInversion) return 0;
+    const baseBien = Number(gasto.baseIrpf ?? gasto.baseIva ?? gasto.total ?? 0);
+    if (baseBien <= 0) return 0;
+
+    const aniosVida = Math.max(1, parseInt(gasto.vidaUtilAnios || 4, 10));
+    const anioAlta = parseInt(String(gasto.fecha || '').slice(0, 4), 10);
+    const trimAlta = parseInt(gasto.trimestre || 1, 10);
+    const anioActualNum = parseInt(String(anioObjetivo), 10);
+
+    if (isNaN(anioAlta) || isNaN(anioActualNum)) return 0;
+    if (anioActualNum < anioAlta || anioActualNum >= anioAlta + aniosVida) return 0;
+
+    // Si es el primer año y el trimestre actual es anterior al alta, aún no aplica amortización
+    if (anioActualNum === anioAlta && q < trimAlta) return 0;
+
+    // Amortización lineal anual repartida en 4 trimestres (25% de la cuota anual por trimestre)
+    const cuotaAnual = baseBien / aniosVida;
+    const cuotaTrimestral = cuotaAnual / 4;
+    return Math.round(cuotaTrimestral * 100) / 100;
+}
+
+export function calcularGastoIrpfImputableTrimestre(state, q, anioObjetivo) {
+    const anioStr = String(anioObjetivo);
+    let total = 0;
+
+    (state.gastos || []).forEach(g => {
+        if (g.esBienInversion) {
+            total += calcularAmortizacionTrimestralBien(g, q, anioStr);
+        } else if (String(g.fecha || '').startsWith(anioStr) && Number(g.trimestre) === Number(q)) {
+            total += (Number(g.baseIrpf) || 0);
+        }
+    });
+
+    return Math.round(total * 100) / 100;
+}
+
 export function calculateQuarter(state, q, anio = null) {
     const anioObjetivo = anio ? String(anio) : String(state.ejercicioActivo || new Date().getFullYear());
     const esMismoAnio = (item) => String(item.fecha || '').startsWith(anioObjetivo);
@@ -36,15 +75,18 @@ export function calculateQuarter(state, q, anio = null) {
     const gasQ = state.gastos.filter(g => esMismoAnio(g) && g.trimestre === q);
     const ingBaseQ = ingQ.reduce((a, b) => a + (Number(b.base) || 0), 0);
     const ingIvaQ = ingQ.reduce((a, b) => a + (Number(b.iva) || 0), 0);
-    const gasBaseIrpfQ = gasQ.reduce((a, b) => a + (Number(b.baseIrpf) || 0), 0);
+    const gasBaseIrpfQ = calcularGastoIrpfImputableTrimestre(state, q, anioObjetivo);
     const gasIvaQ = gasQ.filter(g => g.tipo !== 'gasto').reduce((a, b) => a + (Number(b.iva) || 0), 0);
     const ivaLiquidacion = ingIvaQ - gasIvaQ;
 
     // IRPF (Modelo 130): Acumulativo desde 1T hasta trimestre q dentro del mismo año fiscal
     const ingAcum = state.ingresos.filter(i => esMismoAnio(i) && i.trimestre <= q);
-    const gasAcum = state.gastos.filter(g => esMismoAnio(g) && g.trimestre <= q);
     const ingBaseAcum = ingAcum.reduce((a, b) => a + (Number(b.base) || 0), 0);
-    const gasBaseAcum = gasAcum.reduce((a, b) => a + (Number(b.baseIrpf) || 0), 0);
+    let gasBaseAcum = 0;
+    for (let t = 1; t <= q; t++) {
+        gasBaseAcum += calcularGastoIrpfImputableTrimestre(state, t, anioObjetivo);
+    }
+    gasBaseAcum = Math.round(gasBaseAcum * 100) / 100;
 
     // Rendimiento neto previo acumulado
     const rendNetoPrevioAcum = ingBaseAcum - gasBaseAcum;
