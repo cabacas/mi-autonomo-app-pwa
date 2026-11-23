@@ -6,14 +6,13 @@ export function evaluarAlertasAutonomo(state, fechaReferencia = null) {
     const hoyStr = fechaReferencia || new Date().toISOString().slice(0, 10);
     const hoy = new Date(hoyStr + 'T12:00:00');
     const anioAct = String(state.ejercicioActivo || hoy.getFullYear());
-    const mes = hoy.getMonth() + 1; // 1..12
+    const mes = hoy.getMonth() + 1;
     const dia = hoy.getDate();
 
     const trimActual = Math.ceil(mes / 3);
     const qData = calculateQuarter(state, trimActual, anioAct);
 
     // 1. ALERTAS DE PLAZOS FISCALES AEAT (MODELOS 303 / 130) Y PRESENTACIÓN DE LIBROS
-    // Ventanas habituales de presentación trimestral (abril, julio, octubre y enero del año siguiente)
     const esMesLiquidacion = [1, 4, 7, 10].includes(mes);
     if (esMesLiquidacion && dia <= 22) {
         const diasRestantes = Math.max(0, 20 - dia);
@@ -21,10 +20,10 @@ export function evaluarAlertasAutonomo(state, fechaReferencia = null) {
             id: `plazo-aeat-${anioAct}-${mes}`,
             categoria: 'PLAZO AEAT',
             nivel: diasRestantes <= 5 ? 'critica' : 'aviso',
-            titulo: `Plazo trimestral Modelos 303 / 130 abierto`,
+            titulo: 'Plazo trimestral Modelos 303 / 130 abierto',
             detalle: diasRestantes > 0
                 ? `Quedan ${diasRestantes} día(s) hasta el día 20 para revisar cierres, exportar libros CSV y presentar los modelos.`
-                : `Hoy es día límite habitual (día 20) para la presentación trimestral y descarga de libros registro.`
+                : 'Hoy es día límite habitual (día 20) para la presentación trimestral y descarga de libros registro.'
         });
     } else if (mes === 12 && dia >= 15) {
         alertas.push({
@@ -32,7 +31,7 @@ export function evaluarAlertasAutonomo(state, fechaReferencia = null) {
             categoria: 'LIBROS Y CIERRE',
             nivel: 'aviso',
             titulo: `Cierre de ejercicio ${anioAct} y exportación de libros`,
-            detalle: `Revisa facturas pendientes, amortizaciones de bienes de inversión y exporta los libros CSV de Ventas, Compras y Bienes antes del cierre.`
+            detalle: 'Revisa facturas pendientes, amortizaciones de bienes de inversión y exporta los libros CSV de Ventas, Compras y Bienes antes del cierre.'
         });
     }
 
@@ -47,7 +46,7 @@ export function evaluarAlertasAutonomo(state, fechaReferencia = null) {
         });
     }
 
-    // 3. ALERTAS DE RITMO DE FACTURACIÓN ("Vas mal, has de facturar más...")
+    // 3. ALERTAS DE RITMO DE FACTURACIÓN
     const ingAnio = (state.ingresos || []).filter(i => String(i.fecha || '').startsWith(anioAct) && i.tipoDocumento !== 'rectificativa');
     const facturadoAnio = ingAnio.reduce((s, i) => s + (Number(i.base) || 0), 0);
     const objetivoMensual = Number(state.perfil?.objetivoFacturacionMensual) || 2500;
@@ -94,7 +93,7 @@ export function evaluarAlertasAutonomo(state, fechaReferencia = null) {
             categoria: 'TESORERÍA · COBROS',
             nivel: 'aviso',
             titulo: `${cobrosPendientes.length} factura(s) pendiente(s) de cobro (${formatEur(totalCobros)})`,
-            detalle: `Revisa los cobros pendientes para evitar tensiones de caja antes de impuestos o cuotas.`
+            detalle: 'Revisa los cobros pendientes para evitar tensiones de caja antes de impuestos o cuotas.'
         });
     }
 
@@ -106,7 +105,7 @@ export function evaluarAlertasAutonomo(state, fechaReferencia = null) {
             categoria: 'TESORERÍA · PAGOS',
             nivel: 'aviso',
             titulo: `${pagosPendientes.length} compra(s)/gasto(s) pendiente(s) de pago (${formatEur(totalPagos)})`,
-            detalle: `Tienes facturas o gastos marcados como pendientes de pago en tesorería.`
+            detalle: 'Tienes facturas o gastos marcados como pendientes de pago en tesorería.'
         });
     }
 
@@ -117,7 +116,7 @@ export function evaluarAlertasAutonomo(state, fechaReferencia = null) {
             categoria: 'SEGURIDAD LOCAL',
             nivel: 'aviso',
             titulo: 'Sin copia de seguridad .json exportada',
-            detalle: `Como los datos residen en el navegador (localStorage e IndexedDB), conviene exportar una copia .json periódicamente.`
+            detalle: 'Como los datos residen en el navegador (localStorage e IndexedDB), conviene exportar una copia .json periódicamente.'
         });
     }
 
@@ -130,12 +129,13 @@ export function construirEnlaceCorreoAlertas(perfil, alertas, anioAct) {
     const lineas = [
         `Resumen de alertas · Ejercicio ${anioAct}`,
         `Titular: ${perfil?.nombre || 'Autónomo'} (${perfil?.nif || 'sin NIF'})`,
-        '----------------------------------------',
-        ...alertas.map(a => `[${a.categoria}] ${a.titulo}
-${a.detalle}
-`)
+        '----------------------------------------'
     ];
-    const cuerpo = encodeURIComponent(lineas.join('
-'));
+    alertas.forEach(a => {
+        lineas.push(`[${a.categoria}] ${a.titulo}`);
+        lineas.push(a.detalle);
+        lineas.push('');
+    });
+    const cuerpo = encodeURIComponent(lineas.join('\n'));
     return `mailto:${destino}?subject=${asunto}&body=${cuerpo}`;
 }
