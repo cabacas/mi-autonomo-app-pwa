@@ -214,3 +214,104 @@ export function validarDocumentoFiscalES(docRaw) {
         mensaje: 'Formato no reconocido. Debe ser DNI (8 números + letra), NIE (X/Y/Z + 7 números + letra) o CIF (Letra + 7 números + control).'
     };
 }
+
+
+/* ================= LIBRO DE BIENES DE INVERSIÓN Y CUENTA DE PÉRDIDAS Y GANANCIAS ================= */
+export function calcularDetalleAmortizacionBien(gasto, anioObjetivo) {
+    const anioNum = parseInt(String(anioObjetivo || new Date().getFullYear()), 10);
+    const baseAdq = Math.round((Number(gasto.baseIrpf ?? gasto.baseIva ?? gasto.total ?? 0)) * 100) / 100;
+    const vidaUtil = Math.max(1, parseInt(gasto.vidaUtilAnios || 4, 10));
+    const cuotaAnualTeorica = Math.round((baseAdq / vidaUtil) * 100) / 100;
+
+    const anioAlta = parseInt(String(gasto.fecha || '').slice(0, 4), 10);
+    const trimAlta = Math.max(1, Math.min(4, parseInt(gasto.trimestre || 1, 10)));
+
+    let cuotaEjercicio = 0;
+    let amortizadoAcumuladoAnterior = 0;
+
+    if (!isNaN(anioAlta) && !isNaN(anioNum)) {
+        // Calcular cuota imputable en cada año desde el alta hasta anioNum
+        for (let y = anioAlta; y <= anioNum; y++) {
+            if (y >= anioAlta + vidaUtil) break;
+            let trimestresActivosEnY = 4;
+            if (y === anioAlta) {
+                trimestresActivosEnY = 5 - trimAlta; // ej. alta en 2T -> 2T, 3T, 4T = 3 trimestres
+            }
+            const cuotaAnioY = Math.round(((cuotaAnualTeorica / 4) * trimestresActivosEnY) * 100) / 100;
+            if (y < anioNum) {
+                amortizadoAcumuladoAnterior += cuotaAnioY;
+            } else if (y === anioNum) {
+                cuotaEjercicio = cuotaAnioY;
+            }
+        }
+    }
+
+    amortizadoAcumuladoAnterior = Math.min(baseAdq, Math.round(amortizadoAcumuladoAnterior * 100) / 100);
+    cuotaEjercicio = Math.min(Math.max(0, baseAdq - amortizadoAcumuladoAnterior), Math.round(cuotaEjercicio * 100) / 100);
+    const amortizadoTotal = Math.round((amortizadoAcumuladoAnterior + cuotaEjercicio) * 100) / 100;
+    const valorNetoPendiente = Math.max(0, Math.round((baseAdq - amortizadoTotal) * 100) / 100);
+
+    return {
+        id: gasto.id,
+        fechaAlta: gasto.fecha,
+        trimAlta,
+        concepto: gasto.proveedor || 'Bien de inversión',
+        categoria: gasto.cat || 'INMOVILIZADO',
+        vidaUtil,
+        baseAdq,
+        cuotaAnualTeorica,
+        amortizadoAnterior: amortizadoAcumuladoAnterior,
+        cuotaEjercicio,
+        amortizadoTotal,
+        valorNetoPendiente
+    };
+}
+
+export function generarCuentaPyG(state, anioObjetivo) {
+    const anioStr = String(anioObjetivo || state.ejercicioActivo || new Date().getFullYear());
+    const ingresos = (state.ingresos || []).filter(i => String(i.fecha || '').startsWith(anioStr));
+    const gastos = (state.gastos || []).filter(g => String(g.fecha || '').startsWith(anioStr));
+
+    const ingresosExplotacion = ingresos.reduce((s, i) => s + (Number(i.base) || 0), 0);
+
+    // Agrupar gastos corrientes (no bienes de inversión) por categoría y sumar amortizaciones de bienes de inversión
+    const porCategoria = {};
+    let totalAmortizaciones = 0;
+
+    (state.gastos || []).forEach(g => {
+        if (g.esBienInversion) {
+            const det = calcularDetalleAmortizacionBien(g, anioStr);
+            if (det.cuotaEjercicio > 0) {
+                totalAmortizaciones += det.cuotaEjercicio;
+                const catKey = 'AMORTIZACIONES INMOVILIZADO';
+                porCategoria[catKey] = (porCategoria[catKey] || 0) + det.cuotaEjercicio;
+            }
+        } else if (String(g.fecha || '').startsWith(anioStr)) {
+            const catKey = g.cat || 'OTROS GASTOS';
+            porCategoria[catKey] = (porCategoria[catKey] || 0) + (Number(g.baseIrpf) || 0);
+        }
+    });
+
+    const gastosCorrientes = Object.entries(porCategoria)
+        .filter(([k]) => k !== 'AMORTIZACIONES INMOVILIZADO')
+        .reduce((s, [, v]) => s + v, 0);
+
+    const totalGastosExplotacion = Math.round((gastosCorrientes + totalAmortizaciones) * 100) / 100;
+    const resultadoAntesImpuestos = Math.round((ingresosExplotacion - totalGastosExplotacion) * 100) / 100;
+    const reduccion5DificilJust = resultadoAntesImpuestos > 0
+        ? Math.min(2000, Math.round(resultadoAntesImpuestos * 0.05 * 100) / 100)
+        : 0;
+    const rendimientoNetoSimplificado = Math.round((resultadoAntesImpuestos - reduccion5DificilJust) * 100) / 100;
+
+    return {
+        anio: anioStr,
+        ingresosExplotacion,
+        porCategoria,
+        gastosCorrientes,
+        totalAmortizaciones,
+        totalGastosExplotacion,
+        resultadoAntesImpuestos,
+        reduccion5DificilJust,
+        rendimientoNetoSimplificado
+    };
+}

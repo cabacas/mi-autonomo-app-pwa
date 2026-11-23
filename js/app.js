@@ -18,7 +18,9 @@ import {
     calcularFlujoRegistrado,
     obtenerSaldoBancoActual,
     calculateQuarter,
-    validarDocumentoFiscalES
+    validarDocumentoFiscalES,
+    calcularDetalleAmortizacionBien,
+    generarCuentaPyG
 } from './fiscal.js';
 
 import {
@@ -237,7 +239,7 @@ function switchTab(tabId) {
     });
 
     const grupoVentas = ['ingresos', 'presupuestos', 'clientes'];
-    const grupoCompras = ['facturas-recibidas', 'gastos-simples'];
+    const grupoCompras = ['facturas-recibidas', 'gastos-simples', 'bienes-inversion'];
     const grupoGestion = ['tesoreria', 'analisis-economico', 'posicionamiento', 'resumen-trimestral', 'aeat', 'perfil'];
 
     document.getElementById('mobile-subnav-ventas').classList.toggle('!hidden', !grupoVentas.includes(tabId));
@@ -261,6 +263,7 @@ function switchTab(tabId) {
     if (tabId === 'aeat') updateAEATView();
     if (tabId === 'analisis-economico') renderAnalisisEconomicoCharts(state);
     if (tabId === 'diario-contable') renderDiarioContable();
+    if (tabId === 'bienes-inversion') renderBienesInversion();
     if (tabId === 'posicionamiento') renderPosicionamiento();
     if (tabId === 'presupuestos') renderPresupuestos();
 }
@@ -351,6 +354,7 @@ async function renderAll() {
 
     renderIngresos();
     renderComprasSeparadas();
+    renderBienesInversion();
     renderClientes();
     renderPresupuestos();
     renderTrimestres();
@@ -2482,6 +2486,176 @@ async function ejecutarRadarLocal() {
     }
 }
 
+
+/* ================= LIBRO DE BIENES DE INVERSIÓN, CUENTA P&G Y EXPORTACIÓN CSV AEAT ================= */
+function renderBienesInversion() {
+    const anioAct = String(state.ejercicioActivo || 2026);
+    const bienes = (state.gastos || []).filter(g => g.esBienInversion);
+    const detalles = bienes.map(g => ({ raw: g, det: calcularDetalleAmortizacionBien(g, anioAct) }));
+
+    const totAdq = detalles.reduce((s, x) => s + x.det.baseAdq, 0);
+    const totCuota = detalles.reduce((s, x) => s + x.det.cuotaEjercicio, 0);
+    const totPend = detalles.reduce((s, x) => s + x.det.valorNetoPendiente, 0);
+
+    const elAdq = document.getElementById('bi-total-adq');
+    const elCuota = document.getElementById('bi-total-cuota');
+    const elPend = document.getElementById('bi-total-pendiente');
+    if (elAdq) elAdq.textContent = formatEur(totAdq);
+    if (elCuota) elCuota.textContent = formatEur(totCuota);
+    if (elPend) elPend.textContent = formatEur(totPend);
+
+    const tbody = document.getElementById('tabla-bienes-inversion-body');
+    if (!tbody) return;
+
+    if (!detalles.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-xs text-slate-400">No hay bienes de inversión registrados. Marca la casilla "Bien de inversión" al registrar o editar una compra/gasto.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = detalles.map(({ raw, det }) => `
+        <tr class="border-b hover:bg-slate-50">
+            <td class="px-3 py-2.5 font-mono text-xs">${fechaLocal(det.fechaAlta)} (${det.trimAlta}T)</td>
+            <td class="px-3 py-2.5 font-bold text-slate-900">${det.concepto}<div class="text-[10px] text-slate-400">${det.categoria}</div></td>
+            <td class="px-3 py-2.5 text-center"><span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold text-xs">${det.vidaUtil} años</span></td>
+            <td class="px-3 py-2.5 text-right font-semibold">${formatEur(det.baseAdq)}</td>
+            <td class="px-3 py-2.5 text-right text-slate-500">${formatEur(det.amortizadoAnterior)}</td>
+            <td class="px-3 py-2.5 text-right font-extrabold text-amber-700">${formatEur(det.cuotaEjercicio)}</td>
+            <td class="px-3 py-2.5 text-right font-bold text-blue-700">${formatEur(det.valorNetoPendiente)}</td>
+            <td class="px-3 py-2.5 text-center whitespace-nowrap">
+                <button onclick="editarCompra(${raw.id})" class="text-amber-600 hover:text-amber-800 px-1.5" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="deleteGasto(${raw.id})" class="text-rose-600 px-1.5" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function imprimirCuentaPyG() {
+    const anioSel = document.getElementById('eco-anio-a')?.value || String(state.ejercicioActivo || 2026);
+    const pyg = generarCuentaPyG(state, anioSel);
+    const titular = state.perfil.nombre || 'Autónomo';
+    const nif = state.perfil.nif || '';
+
+    const filasCats = Object.entries(pyg.porCategoria)
+        .filter(([, imp]) => Math.abs(imp) > 0)
+        .map(([cat, imp]) => `<tr><td>${cat}</td><td style="text-align:right;">-${formatEur(imp)}</td></tr>`)
+        .join('');
+
+    const w = window.open('', '_blank');
+    if (!w) { alert('Permite las ventanas emergentes para imprimir la Cuenta de Pérdidas y Ganancias.'); return; }
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Cuenta Pérdidas y Ganancias ${pyg.anio}</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 30px; font-size: 11px; }
+        .head { display: flex; justify-content: space-between; border-bottom: 2px solid #1e293b; padding-bottom: 12px; margin-bottom: 18px; }
+        h1 { margin: 0; font-size: 18px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        td { padding: 7px 6px; border-bottom: 1px solid #e2e8f0; }
+        .sec { background: #f8fafc; font-weight: bold; color: #0f172a; }
+        .tot { font-weight: 800; border-top: 1.5px solid #334155; background: #eff6ff; font-size: 12px; }
+    </style></head><body>
+    <div class="head">
+        <div><h1>CUENTA DE PÉRDIDAS Y GANANCIAS · EJERCICIO ${pyg.anio}</h1><p>${titular}${nif ? ' · NIF: ' + nif : ''}</p></div>
+        <div style="text-align:right;"><p>Estimación Directa</p></div>
+    </div>
+    <table>
+        <tr class="sec"><td>A) INGRESOS DE EXPLOTACIÓN (Bases imponibles)</td><td style="text-align:right;">${formatEur(pyg.ingresosExplotacion)}</td></tr>
+        <tr class="sec"><td colspan="2">B) GASTOS DE EXPLOTACIÓN Y AMORTIZACIONES</td></tr>
+        ${filasCats || '<tr><td colspan="2" style="color:#64748b;">Sin gastos registrados en el ejercicio</td></tr>'}
+        <tr><td><strong>Total Gastos y Amortizaciones</strong></td><td style="text-align:right;font-weight:bold;">-${formatEur(pyg.totalGastosExplotacion)}</td></tr>
+        <tr class="tot"><td>RESULTADO CONTABLE ANTES DE IMPUESTOS (A - B)</td><td style="text-align:right;">${formatEur(pyg.resultadoAntesImpuestos)}</td></tr>
+        <tr><td>Reducción 5% gastos difícil justificación (Est. Directa Simplificada)</td><td style="text-align:right;">-${formatEur(pyg.reduccion5DificilJust)}</td></tr>
+        <tr class="tot"><td>RENDIMIENTO NETO REDUCIDO ESTIMADO</td><td style="text-align:right;">${formatEur(pyg.rendimientoNetoSimplificado)}</td></tr>
+    </table>
+    <p style="margin-top:24px;font-size:9px;color:#64748b;">Informe de gestión generado localmente. No sustituye a la declaración oficial presentada ante la AEAT.</p>
+    <script>window.onload=()=>window.print();<\/script></body></html>`);
+    w.document.close();
+}
+
+function escaparCSV(val) {
+    const s = String(val ?? '').replace(/"/g, '""');
+    return `"${s}"`;
+}
+
+function exportarLibroCSV(tipoLibro) {
+    const anioAct = String(state.ejercicioActivo || 2026);
+    let filasCSV = [];
+    let nombreArchivo = `Libro_${tipoLibro}_${anioAct}.csv`;
+
+    if (tipoLibro === 'ventas') {
+        const cabecera = ['Fecha Expedición', 'Trimestre', 'Número Documento', 'Tipo', 'NIF Destinatario', 'Nombre / Razón Social', 'Base Imponible', 'Cuota IVA', 'Retención IRPF', 'Total Factura', 'Estado'];
+        filasCSV.push(cabecera.map(escaparCSV).join(';'));
+        (state.ingresos || [])
+            .filter(i => String(i.fecha || '').startsWith(anioAct))
+            .forEach(i => {
+                filasCSV.push([
+                    i.fecha,
+                    `${i.trimestre}T`,
+                    i.numero,
+                    i.tipoDocumento === 'rectificativa' ? 'RECTIFICATIVA' : 'FACTURA',
+                    i.nif || '',
+                    i.cliente || '',
+                    Number(i.base || 0).toFixed(2),
+                    Number(i.iva || 0).toFixed(2),
+                    Number(i.retencion || 0).toFixed(2),
+                    Number(i.total || 0).toFixed(2),
+                    i.estado || ''
+                ].map(escaparCSV).join(';'));
+            });
+        nombreArchivo = `Libro_Ventas_Ingresos_AEAT_${anioAct}.csv`;
+    } else if (tipoLibro === 'compras') {
+        const cabecera = ['Fecha', 'Trimestre', 'Tipo Registro', 'Nº Fra. Proveedor', 'NIF Proveedor', 'Proveedor / Concepto', 'Categoría', 'Base Deducible IRPF', 'IVA Soportado', 'Total', 'Estado'];
+        filasCSV.push(cabecera.map(escaparCSV).join(';'));
+        (state.gastos || [])
+            .filter(g => String(g.fecha || '').startsWith(anioAct))
+            .forEach(g => {
+                filasCSV.push([
+                    g.fecha,
+                    `${g.trimestre}T`,
+                    g.tipo === 'gasto' ? 'GASTO/TICKET' : 'FRA. RECIBIDA',
+                    g.numFactura || '',
+                    g.nifProveedor || '',
+                    g.proveedor || '',
+                    g.cat || '',
+                    Number(g.baseIrpf ?? g.baseIva ?? g.total ?? 0).toFixed(2),
+                    Number(g.iva || 0).toFixed(2),
+                    Number(g.total || 0).toFixed(2),
+                    g.estado || ''
+                ].map(escaparCSV).join(';'));
+            });
+        nombreArchivo = `Libro_Compras_Gastos_AEAT_${anioAct}.csv`;
+    } else if (tipoLibro === 'bienes') {
+        const cabecera = ['Fecha Alta', 'Bien / Concepto', 'Categoría', 'Vida Útil (Años)', 'Valor Adquisición', 'Amortizado Anterior', `Cuota Amortización ${anioAct}`, 'Valor Neto Pendiente'];
+        filasCSV.push(cabecera.map(escaparCSV).join(';'));
+        (state.gastos || [])
+            .filter(g => g.esBienInversion)
+            .forEach(g => {
+                const det = calcularDetalleAmortizacionBien(g, anioAct);
+                filasCSV.push([
+                    det.fechaAlta,
+                    det.concepto,
+                    det.categoria,
+                    det.vidaUtil,
+                    det.baseAdq.toFixed(2),
+                    det.amortizadoAnterior.toFixed(2),
+                    det.cuotaEjercicio.toFixed(2),
+                    det.valorNetoPendiente.toFixed(2)
+                ].map(escaparCSV).join(';'));
+            });
+        nombreArchivo = `Libro_Bienes_Inversion_AEAT_${anioAct}.csv`;
+    }
+
+    const bom = '﻿';
+    const blob = new Blob([bom + filasCSV.join('
+')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 /* Exponer funciones globales requeridas por los atributos onclick/onsubmit del HTML */
 Object.assign(window, {
     switchTab,
@@ -2544,6 +2718,9 @@ Object.assign(window, {
     renderAnalisisEconomico: () => renderAnalisisEconomicoCharts(state),
     renderDiarioContable,
     imprimirDiarioContable,
+    renderBienesInversion,
+    imprimirCuentaPyG,
+    exportarLibroCSV,
     toggleCamposAmortizacion,
     renderPosicionamiento,
     ejecutarRadarLocal,
