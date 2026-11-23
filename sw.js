@@ -10,6 +10,7 @@ const APP_SHELL = [
   './js/app.js',
   './js/storage.js',
   './js/fiscal.js',
+  './js/alerts.js',
   './js/charts.js',
   './js/ocr.js',
   './js/einvoice.js',
