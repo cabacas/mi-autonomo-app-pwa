@@ -102,44 +102,9 @@
     border-color: #10264b;
 }
 
-/* Barra superior de Gestión en 2 filas simétricas estilo barra inferior (icono arriba + etiqueta) */
+/* En escritorio (>= 768px) no se muestra la barra superior duplicada de Gestión; la navegación vive en el sidebar */
 .gestion-tabs-2rows {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 6px;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-}
-
-.g-tab-btn {
-    flex: 0 0 calc((100% - 24px) / 5);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    padding: 7px 4px;
-    border-radius: 12px;
-    font-size: 10px;
-    font-weight: 700;
-    color: #475569;
-    background: transparent;
-    transition: all 0.15s ease;
-    line-height: 1.1;
-}
-
-.g-tab-btn i {
-    font-size: 13px;
-}
-
-.g-tab-btn.active {
-    background: #10264b;
-    color: #ffffff;
-    box-shadow: 0 2px 6px rgba(16, 38, 75, 0.22);
+    display: none;
 }
 
 /* Barra inferior móvil y responsive */
@@ -150,6 +115,46 @@
 @media (max-width: 767px) {
     .app-sidebar {
         display: none;
+    }
+
+    .gestion-tabs-2rows {
+        display: flex !important;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 5px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 6px;
+        margin-bottom: 8px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    }
+
+    .g-tab-btn {
+        flex: 0 0 calc((100% - 20px) / 5);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 6px 2px;
+        border-radius: 11px;
+        font-size: 9.5px;
+        font-weight: 700;
+        color: #475569;
+        background: transparent;
+        transition: all 0.15s ease;
+        line-height: 1.1;
+    }
+
+    .g-tab-btn i {
+        font-size: 12px;
+    }
+
+    .g-tab-btn.active {
+        background: #10264b;
+        color: #ffffff;
+        box-shadow: 0 2px 6px rgba(16, 38, 75, 0.22);
     }
 
     .app-main {
