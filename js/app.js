@@ -2658,9 +2658,7 @@ async function enviarAlertasPorEmail() {
     const hrefMailto = construirEnlaceCorreoAlertas(state.perfil, alertas, anioAct);
 
     // En móvil con Web Share API permite enviar directo a apps de correo/mensajería; en escritorio abre mailto:
-    const textoPlano = alertas.map(a => `[${a.categoria}] ${a.titulo} - ${a.detalle}`).join('
-
-');
+    const textoPlano = alertas.map(a => `[${a.categoria}] ${a.titulo} - ${a.detalle}`).join('\n\n');
     if (navigator.share && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
         try {
             await navigator.share({
