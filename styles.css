@@ -1,4 +1,106 @@
+/* ================= ESTILOS ESTRUCTURALES DE MI AUTÓNOMO ================= */
+:root {
+    --brand-navy: #10264b;
+    --brand-navy-dark: #091730;
+    --brand-blue: #2563eb;
+}
 
+.app-shell {
+    width: 100%;
+    min-width: 0;
+}
+
+.app-sidebar {
+    background: linear-gradient(180deg, var(--brand-navy) 0%, var(--brand-navy-dark) 100%);
+    min-height: 100%;
+}
+
+.side-link {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #dbeafe;
+    text-align: left;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.side-link:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.side-link.active {
+    background: #2563eb;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.app-main {
+    min-width: 0;
+}
+
+.app-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.metric-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.metric-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.chart-wrap {
+    position: relative;
+    height: 240px;
+    width: 100%;
+}
+
+/* Submenús móviles en píldora */
+.mobile-subnav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.m-pill {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    padding: 8px 14px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: all 0.15s ease;
+}
+
+.m-pill.active {
+    background: #10264b;
+    color: #ffffff;
+    border-color: #10264b;
+}
 
 /* Barra superior de Gestión en 2 filas simétricas estilo barra inferior (icono arriba + etiqueta) */
 .gestion-tabs-2rows {
@@ -40,13 +142,75 @@
     box-shadow: 0 2px 6px rgba(16, 38, 75, 0.22);
 }
 
-@media (max-width: 420px) {
-    .gestion-tabs-2rows {
-        gap: 4px;
-        padding: 5px;
+/* Barra inferior móvil y responsive */
+.mobile-bottom-nav {
+    display: none;
+}
+
+@media (max-width: 767px) {
+    .app-sidebar {
+        display: none;
     }
-    .g-tab-btn {
-        font-size: 9px;
-        padding: 6px 2px;
+
+    .app-main {
+        padding: 14px 12px 92px 12px;
+    }
+
+    .mobile-bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 45;
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        background: #ffffff;
+        border-top: 1px solid #e2e8f0;
+        padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+        box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+    }
+
+    .m-nav-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #64748b;
+        min-width: 52px;
+    }
+
+    .m-nav-btn i {
+        font-size: 15px;
+    }
+
+    .m-nav-btn.active {
+        color: #2563eb;
+        font-weight: 800;
+    }
+
+    .m-nav-fab {
+        width: 42px;
+        height: 42px;
+        border-radius: 9999px;
+        background: #2563eb;
+        color: #ffffff;
+        display: grid;
+        place-items: center;
+        font-size: 16px;
+        margin-top: -16px;
+        box-shadow: 0 6px 14px rgba(37, 99, 235, 0.4);
+    }
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    body {
+        background: #ffffff !important;
     }
 }
