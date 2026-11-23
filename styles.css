@@ -71,38 +71,7 @@
     width: 100%;
 }
 
-/* Submenús móviles en píldora */
-.mobile-subnav {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    -webkit-overflow-scrolling: touch;
-}
-
-.m-pill {
-    display: inline-flex;
-    align-items: center;
-    white-space: nowrap;
-    padding: 8px 14px;
-    border-radius: 9999px;
-    font-size: 12px;
-    font-weight: 700;
-    background: #ffffff;
-    color: #334155;
-    border: 1px solid #cbd5e1;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-    transition: all 0.15s ease;
-}
-
-.m-pill.active {
-    background: #10264b;
-    color: #ffffff;
-    border-color: #10264b;
-}
-
-/* En escritorio (>= 768px) no se muestra la barra superior duplicada de Gestión; la navegación vive en el sidebar */
+/* En escritorio (>= 768px) no se muestra la barra superior de Gestión; la navegación vive en el sidebar */
 .gestion-tabs-2rows {
     display: none;
 }
@@ -118,6 +87,9 @@
     }
 
     .gestion-tabs-2rows {
+        position: sticky;
+        top: 56px;
+        z-index: 35;
         display: flex !important;
         flex-wrap: wrap;
         justify-content: center;
@@ -127,7 +99,7 @@
         border-radius: 16px;
         padding: 6px;
         margin-bottom: 8px;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
     }
 
     .g-tab-btn {
@@ -158,7 +130,7 @@
     }
 
     .app-main {
-        padding: 14px 12px 92px 12px;
+        padding: 10px 12px 92px 12px;
     }
 
     .mobile-bottom-nav {
