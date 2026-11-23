@@ -2146,15 +2146,16 @@ async function ejecutarRadarLocal() {
 
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Consultando registros...';
-    badge.textContent = 'Buscando en OpenStreetMap...';
+    badge.textContent = 'Consultando OpenStreetMap...';
     badge.className = 'text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1 rounded-full';
 
     try {
         const res = await consultarCompetenciaLocalOSM(state.perfil.ciudad, bench.sector, bench.osmTags);
         document.getElementById('bench-competidores-count').textContent = String(res.totalDetectados);
-        document.getElementById('bench-competidores-ciudad').textContent = `En radio ${res.radioKm} km (${res.ciudadOficial})`;
+        document.getElementById('bench-competidores-ciudad').textContent = res.ambito || `Provincia (${res.ciudadOficial})`;
+        document.getElementById('radar-ciudad-nombre').textContent = res.ambito || res.ciudadOficial;
 
-        badge.textContent = `${res.totalDetectados} registros encontrados`;
+        badge.textContent = `${res.totalDetectados} en ${res.ambito || res.ciudadOficial}`;
         badge.className = 'text-xs font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full';
 
         if (res.muestraNegocios.length) {

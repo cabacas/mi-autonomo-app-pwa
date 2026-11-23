@@ -99,15 +99,14 @@ export function obtenerBenchmarkSectorial(perfil, catalogoIAE) {
 }
 
 /**
- * Consulta negocios locales en el municipio usando Nominatim (OpenStreetMap)
- * con acotación geográfica por bounding box (viewbox + bounded=1) y múltiples términos
- * por sector para que devuelva resultados reales y variados en la ciudad.
+ * Consulta negocios del sector ampliando el radio de búsqueda a toda la provincia
+ * del municipio configurado en el perfil (ej. Terrassa -> Provincia de Barcelona).
  */
 export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
     const ciudadLimpia = String(ciudad || '').trim();
     if (!ciudadLimpia) throw new Error('Configura primero tu ciudad en Mi Perfil.');
 
-    // 1. Geocodificar municipio con Nominatim (OSM) para obtener coordenadas y bounding box
+    // 1. Geocodificar municipio para detectar su provincia y localidad oficial
     const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(ciudadLimpia + ', España')}&format=json&limit=1&addressdetails=1`;
     const resNom = await fetch(nomUrl, { headers: { 'Accept-Language': 'es' } });
     if (!resNom.ok) throw new Error('No se pudo conectar con el servicio de mapas.');
@@ -117,13 +116,26 @@ export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
     }
 
     const place = dataNom[0];
-    const nombreOficial = (place.address?.city || place.address?.town || place.address?.village || place.display_name.split(',')[0]).trim();
-    // boundingbox viene como [minLat, maxLat, minLon, maxLon] -> Nominatim viewbox espera lon1,lat1,lon2,lat2
-    const bbox = Array.isArray(place.boundingbox) && place.boundingbox.length === 4
-        ? `${place.boundingbox[2]},${place.boundingbox[0]},${place.boundingbox[3]},${place.boundingbox[1]}`
-        : null;
+    const addr = place.address || {};
+    const nombreMunicipio = (addr.city || addr.town || addr.village || place.display_name.split(',')[0]).trim();
+    const nombreProvincia = (addr.province || addr.state_district || addr.county || nombreMunicipio).trim();
 
-    // Palabras clave amplias por sector (en español y catalán/neutro para municipios como Terrassa)
+    // 2. Obtener bounding box (viewbox) de toda la provincia para acotar la búsqueda provincial
+    let bboxProvincia = null;
+    try {
+        const provUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent('Provincia de ' + nombreProvincia + ', España')}&format=json&limit=1`;
+        const resProv = await fetch(provUrl, { headers: { 'Accept-Language': 'es' } });
+        if (resProv.ok) {
+            const dataProv = await resProv.json();
+            if (Array.isArray(dataProv) && dataProv.length && Array.isArray(dataProv[0].boundingbox)) {
+                const b = dataProv[0].boundingbox;
+                bboxProvincia = `${b[2]},${b[0]},${b[3]},${b[1]}`;
+            }
+        }
+    } catch {
+        // Si falla el viewbox provincial, continuamos con consulta textual por provincia
+    }
+
     const terminosPorSector = {
         "Tecnología y Marketing": ['informatica', 'software', 'marketing', 'diseño', 'web', 'agencia', 'tic', 'digital'],
         "Construcción y Reformas": ['reformas', 'construccion', 'electricista', 'fontaneria', 'carpinteria', 'pintura', 'arquitectura'],
@@ -139,17 +151,19 @@ export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
     const vistos = new Set();
     const resultados = [];
 
-    // Consultamos hasta 5 términos del sector acotados al municipio
-    for (const term of terminos.slice(0, 5)) {
+    // 3. Buscar en toda la provincia combinando términos del sector + provincia
+    for (const term of terminos.slice(0, 6)) {
         try {
             const params = new URLSearchParams({
-                q: `${term} ${nombreOficial}`,
+                q: `${term} ${nombreProvincia}`,
                 format: 'json',
-                limit: '8',
-                addressdetails: '1'
+                limit: '12',
+                addressdetails: '1',
+                countrycodes: 'es'
             });
-            if (bbox) {
-                params.set('viewbox', bbox);
+            if (bboxProvincia) {
+                params.set('viewbox', bboxProvincia);
+                params.set('bounded', '1');
             }
             const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
             const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
@@ -158,17 +172,18 @@ export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
                 if (Array.isArray(items)) {
                     items.forEach(item => {
                         const rawName = (item.display_name || '').split(',')[0].trim();
-                        // Filtrar resultados que sean solo el nombre de la calle o del municipio
-                        if (!rawName || rawName.toLowerCase() === nombreOficial.toLowerCase()) return;
+                        if (!rawName || rawName.toLowerCase() === nombreMunicipio.toLowerCase() || rawName.toLowerCase() === nombreProvincia.toLowerCase()) return;
                         const key = rawName.toLowerCase();
                         if (!vistos.has(key)) {
                             vistos.add(key);
-                            const addr = item.address || {};
-                            const calle = [addr.road, addr.house_number].filter(Boolean).join(', ');
+                            const a = item.address || {};
+                            const localidadItem = a.city || a.town || a.village || a.municipality || nombreMunicipio;
+                            const calle = [a.road, a.house_number].filter(Boolean).join(', ');
                             resultados.push({
                                 nombre: rawName,
                                 categoria: term,
-                                direccion: calle || addr.suburb || addr.city || addr.town || nombreOficial
+                                localidad: localidadItem,
+                                direccion: calle ? `${calle} (${localidadItem})` : localidadItem
                             });
                         }
                     });
@@ -177,15 +192,15 @@ export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
         } catch {
             // Continuar con el siguiente término
         }
-        if (resultados.length >= 15) break;
+        if (resultados.length >= 24) break;
     }
 
     return {
-        ciudadOficial: nombreOficial,
+        ciudadOficial: nombreMunicipio,
+        provinciaOficial: nombreProvincia,
         totalDetectados: resultados.length,
-        muestraNegocios: resultados.slice(0, 12),
-        radioKm: 5,
-        fuenteRespaldo: true
+        muestraNegocios: resultados.slice(0, 18),
+        ambito: `Provincia de ${nombreProvincia}`
     };
 }
 
