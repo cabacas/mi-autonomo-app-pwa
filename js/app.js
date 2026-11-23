@@ -253,7 +253,7 @@ function switchTab(tabId) {
 
     document.getElementById('mobile-subnav-ventas').classList.toggle('!hidden', !grupoVentas.includes(tabId));
     document.getElementById('mobile-subnav-compras').classList.toggle('!hidden', !grupoCompras.includes(tabId));
-    document.getElementById('mobile-subnav-gestion').classList.toggle('!hidden', !grupoGestion.includes(tabId));
+    // En móvil .gestion-tabs-2rows permanece visible para evitar saltos de layout al navegar
 
     document.querySelectorAll('.m-pill, .g-tab-btn').forEach(pill => {
         pill.classList.toggle('active', pill.dataset.subtab === tabId);
@@ -2664,7 +2664,7 @@ function renderCalendario() {
 
     let celdasHtml = '';
     for (let i = 0; i < offsetInicio; i++) {
-        celdasHtml += '<div class="min-h-[76px] sm:min-h-[92px] rounded-lg bg-slate-50/40"></div>';
+        celdasHtml += '<div class="min-h-[52px] sm:min-h-[86px] rounded-lg bg-slate-50/40"></div>';
     }
 
     const mesStr = String(calMesActual + 1).padStart(2, '0');
@@ -2706,7 +2706,7 @@ function renderCalendario() {
 
             etiquetaHtml = `
                 <div class="mt-1 space-y-0.5 w-full overflow-hidden">
-                    <p class="text-[10px] leading-tight font-extrabold line-clamp-2 break-words">${principal.titulo}</p>
+                    <p class="text-[9px] sm:text-[10px] leading-tight font-extrabold line-clamp-1 sm:line-clamp-2 break-words">${principal.titulo}</p>
                     ${extraBadge}
                 </div>
             `;
@@ -2715,7 +2715,7 @@ function renderCalendario() {
         const ringCls = seleccionada ? 'ring-2 ring-blue-600 border-blue-600' : '';
 
         celdasHtml += `
-            <button type="button" onclick="seleccionarDiaCalendario('${fechaIso}', (window.__calEventos || {})['${fechaIso}'] || [])" class="min-h-[76px] sm:min-h-[92px] w-full rounded-lg border p-1.5 flex flex-col justify-between items-start text-left transition ${fondoDiaCls} ${ringCls}">
+            <button type="button" onclick="seleccionarDiaCalendario('${fechaIso}', (window.__calEventos || {})['${fechaIso}'] || [])" class="min-h-[52px] sm:min-h-[86px] w-full rounded-lg border p-1 sm:p-1.5 flex flex-col justify-between items-start text-left transition ${fondoDiaCls} ${ringCls}">
                 <span class="text-xs leading-none ${numDiaCls}">${d}</span>
                 ${etiquetaHtml}
             </button>
