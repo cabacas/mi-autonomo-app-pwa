@@ -2644,8 +2644,7 @@ function exportarLibroCSV(tipoLibro) {
     }
 
     const bom = '﻿';
-    const blob = new Blob([bom + filasCSV.join('
-')], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([bom + filasCSV.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
