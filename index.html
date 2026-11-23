@@ -69,6 +69,7 @@
                 <button class="side-link" data-tab="diario-contable" onclick="switchTab('diario-contable')"><i class="fa-solid fa-book-open w-5"></i> Diario contable</button>
                 <button class="side-link" data-tab="posicionamiento" onclick="switchTab('posicionamiento')"><i class="fa-solid fa-ranking-star w-5"></i> Radar y Posicionamiento</button>
                 <button class="side-link" data-tab="alertas" onclick="switchTab('alertas')"><i class="fa-solid fa-bell w-5"></i> Alertas y Avisos</button>
+                <button class="side-link" data-tab="calendario" onclick="switchTab('calendario')"><i class="fa-solid fa-calendar-days w-5"></i> Calendario fiscal</button>
                 <button class="side-link" data-tab="resumen-trimestral" onclick="switchTab('resumen-trimestral')"><i class="fa-solid fa-chart-pie w-5"></i> Cierres trimestrales</button>
                 <button class="side-link" data-tab="aeat" onclick="switchTab('aeat')"><i class="fa-solid fa-landmark w-5"></i> Modelos AEAT (303/130)</button>
                 <button class="side-link" data-tab="perfil" onclick="switchTab('perfil')"><i class="fa-solid fa-user-gear w-5"></i> Mi perfil y copias</button>
@@ -96,6 +97,7 @@
                 <button type="button" class="m-pill" data-subtab="diario-contable" onclick="switchTab('diario-contable')"><i class="fa-solid fa-book-open mr-1"></i>Diario</button>
                 <button type="button" class="m-pill" data-subtab="posicionamiento" onclick="switchTab('posicionamiento')"><i class="fa-solid fa-ranking-star mr-1"></i>Radar Local</button>
                 <button type="button" class="m-pill" data-subtab="alertas" onclick="switchTab('alertas')"><i class="fa-solid fa-bell mr-1"></i>Alertas</button>
+                <button type="button" class="m-pill" data-subtab="calendario" onclick="switchTab('calendario')"><i class="fa-solid fa-calendar-days mr-1"></i>Calendario</button>
                 <button type="button" class="m-pill" data-subtab="resumen-trimestral" onclick="switchTab('resumen-trimestral')"><i class="fa-solid fa-chart-pie mr-1"></i>Trimestres</button>
                 <button type="button" class="m-pill" data-subtab="aeat" onclick="switchTab('aeat')"><i class="fa-solid fa-landmark mr-1"></i>AEAT</button>
                 <button type="button" class="m-pill" data-subtab="perfil" onclick="switchTab('perfil')"><i class="fa-solid fa-user-gear mr-1"></i>Perfil</button>
@@ -568,6 +570,50 @@
                 </div>
                 <div id="presupuestos-lista" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
                 <p id="presupuestos-vacio" class="hidden text-center text-sm text-slate-500 py-8">Todavía no hay presupuestos.</p>
+            </section>
+
+            <!-- VISTA: CALENDARIO FISCAL, DE LIBROS Y DE OPERACIONES -->
+            <section id="tab-calendario" class="tab-content hidden space-y-5">
+                <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-calendar-days text-blue-600 mr-2"></i>Calendario de IVA, Libros y Operaciones</h2>
+                        <p class="text-xs text-slate-500">Días marcados con plazos de IVA, presentación/cierre de libros y movimientos registrados</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="cambiarMesCalendario(-1)" class="px-3 py-2 rounded-xl border bg-slate-50 hover:bg-slate-100 text-xs font-bold"><i class="fa-solid fa-chevron-left"></i></button>
+                        <span id="cal-mes-titulo" class="text-xs sm:text-sm font-extrabold text-slate-800 min-w-[130px] text-center">Noviembre 2026</span>
+                        <button type="button" onclick="cambiarMesCalendario(1)" class="px-3 py-2 rounded-xl border bg-slate-50 hover:bg-slate-100 text-xs font-bold"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- LEYENDA -->
+                <div class="bg-white px-4 py-3 rounded-xl border border-slate-200 flex flex-wrap gap-4 text-xs text-slate-600">
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Límite IVA / Libros</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Plazos / Libros / Pendientes</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Facturas / Cobros</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Hitos / Pagos / Gastos</span>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <!-- CUADRÍCULA MENSUAL -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 lg:col-span-2 space-y-2">
+                        <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-extrabold text-slate-400 uppercase pb-1 border-b">
+                            <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+                        </div>
+                        <div id="cal-grid-dias" class="grid grid-cols-7 gap-1.5 text-xs"></div>
+                    </div>
+
+                    <!-- DETALLE DEL DÍA SELECCIONADO -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+                        <div>
+                            <p class="text-[10px] font-bold uppercase text-blue-600">Detalle del día</p>
+                            <h3 id="cal-dia-seleccionado-titulo" class="text-sm font-extrabold text-slate-900 mt-0.5">Selecciona un día marcado</h3>
+                        </div>
+                        <div id="cal-dia-eventos" class="space-y-2 text-xs">
+                            <p class="text-slate-400">Pulsa cualquier día del calendario para ver sus hitos de IVA, libros o movimientos.</p>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- VISTA: ALERTAS FISCALES, OPERATIVAS Y DE FACTURACIÓN -->

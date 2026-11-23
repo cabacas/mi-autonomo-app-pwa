@@ -11,6 +11,7 @@ const APP_SHELL = [
   './js/storage.js',
   './js/fiscal.js',
   './js/alerts.js',
+  './js/calendar.js',
   './js/charts.js',
   './js/ocr.js',
   './js/einvoice.js',
