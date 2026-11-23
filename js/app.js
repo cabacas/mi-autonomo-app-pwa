@@ -251,8 +251,6 @@ function switchTab(tabId) {
     const grupoCompras = ['facturas-recibidas', 'gastos-simples', 'bienes-inversion'];
     const grupoGestion = ['tesoreria', 'analisis-economico', 'posicionamiento', 'resumen-trimestral', 'aeat', 'perfil'];
 
-    document.getElementById('mobile-subnav-ventas').classList.toggle('!hidden', !grupoVentas.includes(tabId));
-    document.getElementById('mobile-subnav-compras').classList.toggle('!hidden', !grupoCompras.includes(tabId));
     // En móvil .gestion-tabs-2rows permanece visible para evitar saltos de layout al navegar
 
     document.querySelectorAll('.m-pill, .g-tab-btn').forEach(pill => {
