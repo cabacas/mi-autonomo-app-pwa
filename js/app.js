@@ -2830,7 +2830,7 @@ function exportarLibroCSV(tipoLibro) {
         nombreArchivo = `Libro_Bienes_Inversion_AEAT_${anioAct}.csv`;
     }
 
-    const bom = '﻿';
+    const bom = '\uFEFF';
     const blob = new Blob([bom + filasCSV.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
