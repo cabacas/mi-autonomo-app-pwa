@@ -36,6 +36,10 @@ import {
 } from './benchmark.js';
 
 import {
+    obtenerEventosCalendarioEjercicio
+} from './calendar.js';
+
+import {
     evaluarAlertasAutonomo,
     construirEnlaceCorreoAlertas
 } from './alerts.js';
@@ -269,6 +273,7 @@ function switchTab(tabId) {
     if (tabId === 'analisis-economico') renderAnalisisEconomicoCharts(state);
     if (tabId === 'diario-contable') renderDiarioContable();
     if (tabId === 'alertas') renderAlertas();
+    if (tabId === 'calendario') renderCalendario();
     if (tabId === 'bienes-inversion') renderBienesInversion();
     if (tabId === 'posicionamiento') renderPosicionamiento();
     if (tabId === 'presupuestos') renderPresupuestos();
@@ -366,6 +371,7 @@ async function renderAll() {
     renderTrimestres();
     renderVencimientos();
     renderAlertas();
+    renderCalendario();
     actualizarKPIs();
 }
 
@@ -2605,6 +2611,107 @@ function obtenerAlertasActivas() {
     return evaluarAlertasAutonomo(state);
 }
 
+
+/* ================= CALENDARIO FISCAL, DE LIBROS Y DE OPERACIONES ================= */
+let calMesActual = new Date().getMonth(); // 0..11
+let calFechaSeleccionada = null;
+
+const NOMBRES_MES_CAL = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+function cambiarMesCalendario(delta) {
+    calMesActual = (calMesActual + delta + 12) % 12;
+    renderCalendario();
+}
+
+function seleccionarDiaCalendario(fechaIso, eventosDia) {
+    calFechaSeleccionada = fechaIso;
+    const tituloEl = document.getElementById('cal-dia-seleccionado-titulo');
+    const contEl = document.getElementById('cal-dia-eventos');
+    if (tituloEl) tituloEl.textContent = `Fecha: ${fechaLocal(fechaIso)}`;
+    if (!contEl) return;
+
+    if (!eventosDia || !eventosDia.length) {
+        contEl.innerHTML = '<p class="text-slate-400">No hay plazos de IVA, libros ni movimientos registrados en este día.</p>';
+        return;
+    }
+
+    contEl.innerHTML = eventosDia.map(ev => {
+        const dotCls = ev.nivel === 'critica'
+            ? 'bg-rose-600 text-white'
+            : (ev.nivel === 'ok' ? 'bg-emerald-600 text-white' : (ev.nivel === 'aviso' ? 'bg-amber-500 text-slate-950' : 'bg-blue-600 text-white'));
+        return `<div class="border rounded-xl p-2.5 bg-slate-50 space-y-1">
+            <span class="inline-block text-[9px] font-extrabold uppercase px-2 py-0.5 rounded ${dotCls}">${ev.categoria}</span>
+            <p class="font-bold text-slate-900">${ev.titulo}</p>
+            <p class="text-[11px] text-slate-600 leading-snug">${ev.detalle}</p>
+        </div>`;
+    }).join('');
+}
+
+function renderCalendario() {
+    const grid = document.getElementById('cal-grid-dias');
+    const tituloMes = document.getElementById('cal-mes-titulo');
+    if (!grid || !tituloMes) return;
+
+    const { anio, anioStr, eventosPorFecha } = obtenerEventosCalendarioEjercicio(state, state.ejercicioActivo || 2026);
+    tituloMes.textContent = `${NOMBRES_MES_CAL[calMesActual]} ${anio}`;
+
+    const primerDia = new Date(anio, calMesActual, 1);
+    const ultimoDia = new Date(anio, calMesActual + 1, 0).getDate();
+    // Convertir domingo (0) a índice 6 para empezar la semana en lunes (0..6)
+    const offsetInicio = (primerDia.getDay() + 6) % 7;
+
+    let celdasHtml = '';
+    for (let i = 0; i < offsetInicio; i++) {
+        celdasHtml += '<div class="h-14 sm:h-16 rounded-lg bg-slate-50/40"></div>';
+    }
+
+    const mesStr = String(calMesActual + 1).padStart(2, '0');
+    let primerDiaConEventos = null;
+
+    for (let d = 1; d <= ultimoDia; d++) {
+        const diaStr = String(d).padStart(2, '0');
+        const fechaIso = `${anioStr}-${mesStr}-${diaStr}`;
+        const evs = eventosPorFecha[fechaIso] || [];
+        if (evs.length && !primerDiaConEventos) {
+            primerDiaConEventos = { fechaIso, evs };
+        }
+
+        const tieneCritica = evs.some(e => e.nivel === 'critica');
+        const tieneAviso = evs.some(e => e.nivel === 'aviso');
+        const tieneOk = evs.some(e => e.nivel === 'ok');
+        const tieneInfo = evs.some(e => e.nivel === 'info');
+
+        const seleccionada = calFechaSeleccionada === fechaIso;
+        const bordeCls = seleccionada
+            ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-200'
+            : (evs.length ? 'border-slate-300 bg-white hover:border-blue-400' : 'border-slate-100 bg-slate-50/50 hover:bg-slate-100');
+
+        const dots = [
+            tieneCritica ? '<span class="w-2 h-2 rounded-full bg-rose-600"></span>' : '',
+            tieneAviso ? '<span class="w-2 h-2 rounded-full bg-amber-500"></span>' : '',
+            tieneOk ? '<span class="w-2 h-2 rounded-full bg-emerald-600"></span>' : '',
+            tieneInfo ? '<span class="w-2 h-2 rounded-full bg-blue-600"></span>' : ''
+        ].filter(Boolean).join('');
+
+        celdasHtml += `
+            <button type="button" onclick="seleccionarDiaCalendario('${fechaIso}', (window.__calEventos || {})['${fechaIso}'] || [])" class="h-14 sm:h-16 rounded-lg border p-1.5 flex flex-col justify-between transition ${bordeCls}">
+                <span class="text-xs font-bold text-slate-800 self-start">${d}</span>
+                <div class="flex items-center gap-1 flex-wrap">${dots}</div>
+            </button>
+        `;
+    }
+
+    window.__calEventos = eventosPorFecha;
+    grid.innerHTML = celdasHtml;
+
+    if (primerDiaConEventos && (!calFechaSeleccionada || !calFechaSeleccionada.startsWith(`${anioStr}-${mesStr}`))) {
+        seleccionarDiaCalendario(primerDiaConEventos.fechaIso, primerDiaConEventos.evs);
+    }
+}
+
 function renderAlertas() {
     const inputObj = document.getElementById('alerta-objetivo-mensual');
     const inputMail = document.getElementById('alerta-email-destino');
@@ -2910,6 +3017,9 @@ Object.assign(window, {
     renderAlertas,
     guardarAjustesAlertas,
     enviarAlertasPorEmail,
+    renderCalendario,
+    cambiarMesCalendario,
+    seleccionarDiaCalendario,
     toggleCamposAmortizacion,
     renderPosicionamiento,
     ejecutarRadarLocal,
