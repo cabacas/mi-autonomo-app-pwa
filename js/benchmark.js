@@ -99,15 +99,16 @@ export function obtenerBenchmarkSectorial(perfil, catalogoIAE) {
 }
 
 /**
- * Consulta negocios locales en la ciudad usando Nominatim (OpenStreetMap) y Overpass
- * con consultas ligeras y fallback limpio sin errores 406/504 ni bloqueos CORS.
+ * Consulta negocios locales en el municipio usando Nominatim (OpenStreetMap)
+ * con acotación geográfica por bounding box (viewbox + bounded=1) y múltiples términos
+ * por sector para que devuelva resultados reales y variados en la ciudad.
  */
 export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
     const ciudadLimpia = String(ciudad || '').trim();
     if (!ciudadLimpia) throw new Error('Configura primero tu ciudad en Mi Perfil.');
 
-    // 1. Geocodificar municipio con Nominatim (OSM)
-    const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(ciudadLimpia + ', España')}&format=json&limit=1`;
+    // 1. Geocodificar municipio con Nominatim (OSM) para obtener coordenadas y bounding box
+    const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(ciudadLimpia + ', España')}&format=json&limit=1&addressdetails=1`;
     const resNom = await fetch(nomUrl, { headers: { 'Accept-Language': 'es' } });
     if (!resNom.ok) throw new Error('No se pudo conectar con el servicio de mapas.');
     const dataNom = await resNom.json();
@@ -115,109 +116,75 @@ export async function consultarCompetenciaLocalOSM(ciudad, sector, osmTags) {
         throw new Error(`No se encontró el municipio "${ciudadLimpia}" en el registro geográfico.`);
     }
 
-    const lat = parseFloat(dataNom[0].lat);
-    const lon = parseFloat(dataNom[0].lon);
-    const nombreOficial = dataNom[0].display_name.split(',')[0];
+    const place = dataNom[0];
+    const nombreOficial = (place.address?.city || place.address?.town || place.address?.village || place.display_name.split(',')[0]).trim();
+    // boundingbox viene como [minLat, maxLat, minLon, maxLon] -> Nominatim viewbox espera lon1,lat1,lon2,lat2
+    const bbox = Array.isArray(place.boundingbox) && place.boundingbox.length === 4
+        ? `${place.boundingbox[2]},${place.boundingbox[0]},${place.boundingbox[3]},${place.boundingbox[1]}`
+        : null;
 
-    // 2. Consultar Overpass con radio contenido (1.8 km) y límite estricto (25 resultados) para evitar 504/406
-    let filtroOverpass = '';
-    if (sector === 'Tecnología y Marketing') {
-        filtroOverpass = `node["office"~"it|company|advertising"](around:1800,${lat},${lon});`;
-    } else if (sector === 'Construcción y Reformas') {
-        filtroOverpass = `node["craft"~"electrician|plumber|carpenter|painter|builder"](around:1800,${lat},${lon});`;
-    } else if (sector === 'Comercio y Hostelería') {
-        filtroOverpass = `node["amenity"~"cafe|bar|restaurant"](around:1500,${lat},${lon});`;
-    } else if (sector === 'Profesionales y Consultoría') {
-        filtroOverpass = `node["office"~"lawyer|accountant|tax_advisor|financial|consulting"](around:1800,${lat},${lon});`;
-    } else if (sector === 'Salud, Formación y Estética') {
-        filtroOverpass = `node["amenity"~"clinic|dentist|doctors"](around:1800,${lat},${lon});node["shop"~"hairdresser|beauty"](around:1800,${lat},${lon});`;
-    } else if (sector === 'Industria y Mantenimiento') {
-        filtroOverpass = `node["shop"="car_repair"](around:1800,${lat},${lon});node["craft"~"electronics_repair|cleaning"](around:1800,${lat},${lon});`;
-    } else {
-        filtroOverpass = `node["office"](around:1500,${lat},${lon});`;
-    }
+    // Palabras clave amplias por sector (en español y catalán/neutro para municipios como Terrassa)
+    const terminosPorSector = {
+        "Tecnología y Marketing": ['informatica', 'software', 'marketing', 'diseño', 'web', 'agencia', 'tic', 'digital'],
+        "Construcción y Reformas": ['reformas', 'construccion', 'electricista', 'fontaneria', 'carpinteria', 'pintura', 'arquitectura'],
+        "Comercio y Hostelería": ['restaurante', 'bar', 'cafeteria', 'tienda', 'comercio', 'panaderia', 'alimentacion'],
+        "Transporte y Logística": ['transporte', 'logistica', 'mensajeria', 'mudanzas', 'taxi', 'reparto'],
+        "Profesionales y Consultoría": ['asesoria', 'gestoria', 'abogados', 'consultoria', 'economistas', 'auditoria'],
+        "Salud, Formación y Estética": ['clinica', 'fisioterapia', 'academia', 'peluqueria', 'estetica', 'psicologia', 'dental'],
+        "Industria y Mantenimiento": ['taller', 'mantenimiento', 'reparacion', 'limpieza', 'jardineria', 'industrial'],
+        "General": ['empresa', 'servicios', 'oficina', 'centro', 'estudio']
+    };
 
-    const query = `[out:json][timeout:6];(${filtroOverpass});out 25;`;
-    const endpointsOverpass = [
-        'https://overpass.kumi.systems/api/interpreter',
-        'https://overpass-api.de/api/interpreter'
-    ];
+    const terminos = terminosPorSector[sector] || terminosPorSector['General'];
+    const vistos = new Set();
+    const resultados = [];
 
-    for (const baseEndpoint of endpointsOverpass) {
+    // Consultamos hasta 5 términos del sector acotados al municipio
+    for (const term of terminos.slice(0, 5)) {
         try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 5500);
-            const resp = await fetch(`${baseEndpoint}?data=${encodeURIComponent(query)}`, {
-                signal: controller.signal
+            const params = new URLSearchParams({
+                q: `${term} ${nombreOficial}`,
+                format: 'json',
+                limit: '8',
+                addressdetails: '1'
             });
-            clearTimeout(timer);
+            if (bbox) {
+                params.set('viewbox', bbox);
+            }
+            const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+            const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
             if (resp.ok) {
-                const json = await resp.json();
-                if (json && Array.isArray(json.elements)) {
-                    const negociosConNombre = [];
-                    const vistos = new Set();
-                    json.elements.forEach(el => {
-                        const tags = el.tags || {};
-                        const nombre = tags.name || tags['name:es'] || tags.operator;
-                        if (nombre && !vistos.has(nombre.toLowerCase())) {
-                            vistos.add(nombre.toLowerCase());
-                            const tipoTag = tags.office || tags.craft || tags.shop || tags.amenity || sector;
-                            const calle = [tags['addr:street'], tags['addr:housenumber']].filter(Boolean).join(', ');
-                            negociosConNombre.push({
-                                nombre,
-                                categoria: tipoTag,
-                                direccion: calle || nombreOficial
-                            });
-                        }
-                    });
-                    return {
-                        ciudadOficial: nombreOficial,
-                        totalDetectados: json.elements.length,
-                        muestraNegocios: negociosConNombre.slice(0, 12),
-                        radioKm: 1.8
-                    };
-                }
-            }
-        } catch {
-            // Pasar al siguiente método sin lanzar ruido si hay respaldo
-        }
-    }
-
-    // Respaldo directo vía Nominatim (más estable y rápido en navegador que Overpass)
-    const keywords = BENCHMARKS_SECTOR[sector]?.keywordsLocal || ['empresa', 'servicios'];
-    const vistosFb = new Set();
-    const muestraFb = [];
-
-    for (const kw of keywords.slice(0, 2)) {
-        try {
-            const fbUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(kw + ', ' + nombreOficial)}&format=json&limit=10`;
-            const resFb = await fetch(fbUrl, { headers: { 'Accept-Language': 'es' } });
-            if (resFb.ok) {
-                const dataFb = await resFb.json();
-                if (Array.isArray(dataFb)) {
-                    dataFb.forEach(item => {
-                        const titulo = (item.display_name || '').split(',')[0].trim();
-                        if (titulo && !vistosFb.has(titulo.toLowerCase())) {
-                            vistosFb.add(titulo.toLowerCase());
-                            muestraFb.push({
-                                nombre: titulo,
-                                categoria: kw,
-                                direccion: (item.display_name || '').split(',').slice(1, 3).join(',').trim() || nombreOficial
+                const items = await resp.json();
+                if (Array.isArray(items)) {
+                    items.forEach(item => {
+                        const rawName = (item.display_name || '').split(',')[0].trim();
+                        // Filtrar resultados que sean solo el nombre de la calle o del municipio
+                        if (!rawName || rawName.toLowerCase() === nombreOficial.toLowerCase()) return;
+                        const key = rawName.toLowerCase();
+                        if (!vistos.has(key)) {
+                            vistos.add(key);
+                            const addr = item.address || {};
+                            const calle = [addr.road, addr.house_number].filter(Boolean).join(', ');
+                            resultados.push({
+                                nombre: rawName,
+                                categoria: term,
+                                direccion: calle || addr.suburb || addr.city || addr.town || nombreOficial
                             });
                         }
                     });
                 }
             }
         } catch {
-            // Continuar
+            // Continuar con el siguiente término
         }
+        if (resultados.length >= 15) break;
     }
 
     return {
         ciudadOficial: nombreOficial,
-        totalDetectados: muestraFb.length,
-        muestraNegocios: muestraFb.slice(0, 12),
-        radioKm: 3.5,
+        totalDetectados: resultados.length,
+        muestraNegocios: resultados.slice(0, 12),
+        radioKm: 5,
         fuenteRespaldo: true
     };
 }
