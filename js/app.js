@@ -2660,12 +2660,11 @@ function renderCalendario() {
 
     const primerDia = new Date(anio, calMesActual, 1);
     const ultimoDia = new Date(anio, calMesActual + 1, 0).getDate();
-    // Convertir domingo (0) a índice 6 para empezar la semana en lunes (0..6)
     const offsetInicio = (primerDia.getDay() + 6) % 7;
 
     let celdasHtml = '';
     for (let i = 0; i < offsetInicio; i++) {
-        celdasHtml += '<div class="h-14 sm:h-16 rounded-lg bg-slate-50/40"></div>';
+        celdasHtml += '<div class="min-h-[76px] sm:min-h-[92px] rounded-lg bg-slate-50/40"></div>';
     }
 
     const mesStr = String(calMesActual + 1).padStart(2, '0');
@@ -2679,27 +2678,46 @@ function renderCalendario() {
             primerDiaConEventos = { fechaIso, evs };
         }
 
-        const tieneCritica = evs.some(e => e.nivel === 'critica');
-        const tieneAviso = evs.some(e => e.nivel === 'aviso');
-        const tieneOk = evs.some(e => e.nivel === 'ok');
-        const tieneInfo = evs.some(e => e.nivel === 'info');
-
         const seleccionada = calFechaSeleccionada === fechaIso;
-        const bordeCls = seleccionada
-            ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-200'
-            : (evs.length ? 'border-slate-300 bg-white hover:border-blue-400' : 'border-slate-100 bg-slate-50/50 hover:bg-slate-100');
+        const principal = evs[0] || null;
 
-        const dots = [
-            tieneCritica ? '<span class="w-2 h-2 rounded-full bg-rose-600"></span>' : '',
-            tieneAviso ? '<span class="w-2 h-2 rounded-full bg-amber-500"></span>' : '',
-            tieneOk ? '<span class="w-2 h-2 rounded-full bg-emerald-600"></span>' : '',
-            tieneInfo ? '<span class="w-2 h-2 rounded-full bg-blue-600"></span>' : ''
-        ].filter(Boolean).join('');
+        let fondoDiaCls = 'border-slate-100 bg-slate-50/50 hover:bg-slate-100 text-slate-800';
+        let numDiaCls = 'text-slate-700';
+        let etiquetaHtml = '';
+
+        if (principal) {
+            if (principal.nivel === 'critica') {
+                fondoDiaCls = 'border-rose-300 bg-rose-100/90 hover:bg-rose-200/80 text-rose-950';
+                numDiaCls = 'text-rose-900 font-black';
+            } else if (principal.nivel === 'aviso') {
+                fondoDiaCls = 'border-amber-300 bg-amber-100/90 hover:bg-amber-200/80 text-amber-950';
+                numDiaCls = 'text-amber-950 font-black';
+            } else if (principal.nivel === 'ok') {
+                fondoDiaCls = 'border-emerald-300 bg-emerald-100/90 hover:bg-emerald-200/80 text-emerald-950';
+                numDiaCls = 'text-emerald-950 font-black';
+            } else {
+                fondoDiaCls = 'border-blue-300 bg-blue-100/90 hover:bg-blue-200/80 text-blue-950';
+                numDiaCls = 'text-blue-950 font-black';
+            }
+
+            const extraBadge = evs.length > 1
+                ? `<span class="text-[9px] font-extrabold px-1 rounded bg-white/80 text-slate-800">+${evs.length - 1}</span>`
+                : '';
+
+            etiquetaHtml = `
+                <div class="mt-1 space-y-0.5 w-full overflow-hidden">
+                    <p class="text-[10px] leading-tight font-extrabold line-clamp-2 break-words">${principal.titulo}</p>
+                    ${extraBadge}
+                </div>
+            `;
+        }
+
+        const ringCls = seleccionada ? 'ring-2 ring-blue-600 border-blue-600' : '';
 
         celdasHtml += `
-            <button type="button" onclick="seleccionarDiaCalendario('${fechaIso}', (window.__calEventos || {})['${fechaIso}'] || [])" class="h-14 sm:h-16 rounded-lg border p-1.5 flex flex-col justify-between transition ${bordeCls}">
-                <span class="text-xs font-bold text-slate-800 self-start">${d}</span>
-                <div class="flex items-center gap-1 flex-wrap">${dots}</div>
+            <button type="button" onclick="seleccionarDiaCalendario('${fechaIso}', (window.__calEventos || {})['${fechaIso}'] || [])" class="min-h-[76px] sm:min-h-[92px] w-full rounded-lg border p-1.5 flex flex-col justify-between items-start text-left transition ${fondoDiaCls} ${ringCls}">
+                <span class="text-xs leading-none ${numDiaCls}">${d}</span>
+                ${etiquetaHtml}
             </button>
         `;
     }
