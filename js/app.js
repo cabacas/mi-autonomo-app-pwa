@@ -255,7 +255,7 @@ function switchTab(tabId) {
     document.getElementById('mobile-subnav-compras').classList.toggle('!hidden', !grupoCompras.includes(tabId));
     document.getElementById('mobile-subnav-gestion').classList.toggle('!hidden', !grupoGestion.includes(tabId));
 
-    document.querySelectorAll('.m-pill').forEach(pill => {
+    document.querySelectorAll('.m-pill, .g-tab-btn').forEach(pill => {
         pill.classList.toggle('active', pill.dataset.subtab === tabId);
     });
 
