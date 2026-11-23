@@ -404,6 +404,11 @@
                         <p class="text-xs text-slate-500">Cronograma unificado de facturas emitidas, rectificativas, compras/gastos y movimientos de cobro/pago</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
+                        <select id="diario-filtro-anio" onchange="renderDiarioContable()" class="border border-blue-200 bg-blue-50 text-blue-800 rounded-xl px-3 py-2 text-xs font-extrabold">
+                            <option value="2025">2025</option>
+                            <option value="2026" selected>2026</option>
+                            <option value="2027">2027</option>
+                        </select>
                         <select id="diario-filtro-trimestre" onchange="renderDiarioContable()" class="border rounded-xl px-3 py-2 text-xs font-bold bg-slate-50">
                             <option value="">Todo el año</option>
                             <option value="1">1T</option>
@@ -417,6 +422,9 @@
                             <option value="compra">Compras y Gastos</option>
                             <option value="tesoreria">Cobros y Pagos</option>
                         </select>
+                        <button type="button" onclick="imprimirDiarioContable()" class="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm">
+                            <i class="fa-solid fa-print mr-1.5"></i> Imprimir Diario
+                        </button>
                     </div>
                 </div>
 
