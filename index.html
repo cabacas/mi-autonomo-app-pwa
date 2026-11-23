@@ -17,6 +17,8 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
@@ -63,6 +65,7 @@
                 <button class="side-link" data-tab="gastos-simples" onclick="switchTab('gastos-simples')"><i class="fa-solid fa-receipt w-5"></i> Gastos y tickets</button>
                 <div class="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-blue-300">Fiscal y Análisis</div>
                 <button class="side-link" data-tab="analisis-economico" onclick="switchTab('analisis-economico')"><i class="fa-solid fa-chart-column w-5"></i> Análisis económico</button>
+                <button class="side-link" data-tab="diario-contable" onclick="switchTab('diario-contable')"><i class="fa-solid fa-book-open w-5"></i> Diario contable</button>
                 <button class="side-link" data-tab="posicionamiento" onclick="switchTab('posicionamiento')"><i class="fa-solid fa-ranking-star w-5"></i> Radar y Posicionamiento</button>
                 <button class="side-link" data-tab="resumen-trimestral" onclick="switchTab('resumen-trimestral')"><i class="fa-solid fa-chart-pie w-5"></i> Cierres trimestrales</button>
                 <button class="side-link" data-tab="aeat" onclick="switchTab('aeat')"><i class="fa-solid fa-landmark w-5"></i> Modelos AEAT (303/130)</button>
@@ -87,6 +90,7 @@
             <div id="mobile-subnav-gestion" class="mobile-subnav no-print !hidden">
                 <button type="button" class="m-pill active" data-subtab="tesoreria" onclick="switchTab('tesoreria')"><i class="fa-solid fa-wallet mr-1"></i>Tesorería</button>
                 <button type="button" class="m-pill" data-subtab="analisis-economico" onclick="switchTab('analisis-economico')"><i class="fa-solid fa-chart-column mr-1"></i>Análisis</button>
+                <button type="button" class="m-pill" data-subtab="diario-contable" onclick="switchTab('diario-contable')"><i class="fa-solid fa-book-open mr-1"></i>Diario</button>
                 <button type="button" class="m-pill" data-subtab="posicionamiento" onclick="switchTab('posicionamiento')"><i class="fa-solid fa-ranking-star mr-1"></i>Radar Local</button>
                 <button type="button" class="m-pill" data-subtab="resumen-trimestral" onclick="switchTab('resumen-trimestral')"><i class="fa-solid fa-chart-pie mr-1"></i>Trimestres</button>
                 <button type="button" class="m-pill" data-subtab="aeat" onclick="switchTab('aeat')"><i class="fa-solid fa-landmark mr-1"></i>AEAT</button>
@@ -367,18 +371,78 @@
                     </div>
                 </div>
 
-                <!-- RESULTADOS DEL RADAR DE NEGOCIOS EN TU CIUDAD (OPENSTREETMAP / REGISTROS PÚBLICOS) -->
-                <div class="app-card p-4 sm:p-5 space-y-3">
+                <!-- RESULTADOS DEL RADAR DE NEGOCIOS Y MAPA INTERACTIVO (OPENSTREETMAP + LEAFLET) -->
+                <div class="app-card p-4 sm:p-5 space-y-4">
                     <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
                         <div>
-                            <h3 class="font-extrabold text-slate-800"><i class="fa-solid fa-map-location-dot text-blue-600 mr-2"></i>Negocios de tu Actividad Detectados en <span id="radar-ciudad-nombre">tu ciudad</span></h3>
-                            <p class="text-xs text-slate-500">Consulta en tiempo real sobre registros geográficos abiertos de OpenStreetMap ampliada a toda tu provincia.</p>
+                            <h3 class="font-extrabold text-slate-800"><i class="fa-solid fa-map-location-dot text-blue-600 mr-2"></i>Mapa y Negocios de tu Actividad en <span id="radar-ciudad-nombre">tu ciudad</span></h3>
+                            <p class="text-xs text-slate-500">Geoposicionamiento en tiempo real sobre registros abiertos de OpenStreetMap en tu provincia.</p>
                         </div>
                         <span id="radar-status-badge" class="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full">Listo para consultar</span>
                     </div>
-                    <div id="radar-negocios-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                        <p class="text-xs text-slate-400 col-span-full py-4 text-center">Pulsa el botón superior <strong>"Consultar Registros en Ciudad"</strong> para escanear los negocios de tu sector en tu municipio.</p>
+
+                    <!-- CONTENEDOR MAPA INTERACTIVO -->
+                    <div id="radar-mapa-wrapper" class="hidden space-y-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                            <span><i class="fa-solid fa-location-dot text-blue-600 mr-1"></i>Tu municipio base &nbsp;·&nbsp; <i class="fa-solid fa-location-dot text-rose-600 mr-1"></i>Negocios detectados (pulsa un marcador o tarjeta para centrar)</span>
+                            <button type="button" onclick="centrarMapaRadar()" class="text-blue-700 font-bold hover:underline">Ver todos en el mapa</button>
+                        </div>
+                        <div id="radar-mapa-canvas" class="w-full h-72 sm:h-96 rounded-xl border border-slate-200 z-10 overflow-hidden"></div>
                     </div>
+
+                    <div id="radar-negocios-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        <p class="text-xs text-slate-400 col-span-full py-4 text-center">Pulsa el botón superior <strong>"Consultar Registros en Ciudad"</strong> para escanear y geoposicionar los negocios de tu sector.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VISTA: DIARIO DE CONTABILIDAD CRONOLÓGICO (PASO 1) -->
+            <section id="tab-diario-contable" class="tab-content hidden space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-book-open text-blue-600 mr-2"></i>Diario de Contabilidad</h2>
+                        <p class="text-xs text-slate-500">Cronograma unificado de facturas emitidas, rectificativas, compras/gastos y movimientos de cobro/pago</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="diario-filtro-trimestre" onchange="renderDiarioContable()" class="border rounded-xl px-3 py-2 text-xs font-bold bg-slate-50">
+                            <option value="">Todo el año</option>
+                            <option value="1">1T</option>
+                            <option value="2">2T</option>
+                            <option value="3">3T</option>
+                            <option value="4">4T</option>
+                        </select>
+                        <select id="diario-filtro-tipo" onchange="renderDiarioContable()" class="border rounded-xl px-3 py-2 text-xs font-bold bg-slate-50">
+                            <option value="">Todos los asientos</option>
+                            <option value="ingreso">Facturas / Rectificativas</option>
+                            <option value="compra">Compras y Gastos</option>
+                            <option value="tesoreria">Cobros y Pagos</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">Asientos Mostrados</p><p id="diario-total-asientos" class="text-base sm:text-xl font-extrabold text-slate-900 mt-1">0</p></article>
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">Entradas (Debe / Cobros)</p><p id="diario-suma-entradas" class="text-base sm:text-xl font-extrabold text-emerald-700 mt-1">0,00 €</p></article>
+                    <article class="app-card p-3 sm:p-4"><p class="text-[10px] sm:text-xs font-bold uppercase text-slate-500">Salidas (Haber / Pagos)</p><p id="diario-suma-salidas" class="text-base sm:text-xl font-extrabold text-rose-700 mt-1">0,00 €</p></article>
+                </div>
+
+                <div id="cards-diario-mobile" class="grid grid-cols-1 gap-3 md:hidden"></div>
+                <div class="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                    <table class="w-full text-xs text-left text-slate-600">
+                        <thead class="uppercase bg-slate-100 border-b text-slate-700">
+                            <tr>
+                                <th class="px-3 py-3">Fecha</th>
+                                <th class="px-3 py-3">Trim</th>
+                                <th class="px-3 py-3">Tipo</th>
+                                <th class="px-3 py-3">Documento / Concepto</th>
+                                <th class="px-3 py-3">Tercero</th>
+                                <th class="px-3 py-3 text-right">Base / Imp.</th>
+                                <th class="px-3 py-3 text-right">IVA / IRPF</th>
+                                <th class="px-3 py-3 text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-diario-body"></tbody>
+                    </table>
                 </div>
             </section>
 
@@ -704,6 +768,22 @@
                 <div id="comp-importes-gasto" class="hidden">
                     <label class="block text-xs font-bold text-slate-600">Importe Total Deducible IRPF (€) *</label>
                     <input type="number" step="0.01" id="comp-total-simple" class="w-full border rounded-xl p-2.5 text-sm" placeholder="Ej. 310.00 (Cuota autónomos, seguro, ticket...)" oninput="actualizarResumenCompra()">
+                </div>
+
+                <div class="border rounded-xl p-3 bg-amber-50/50 border-amber-200 space-y-2">
+                    <label class="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                        <input type="checkbox" id="comp-bien-inversion" onchange="toggleCamposAmortizacion()" class="rounded text-amber-600">
+                        <span>Bien de inversión / Inmovilizado amortizable (equipo, maquinaria, vehículo...)</span>
+                    </label>
+                    <div id="comp-amortizacion-campos" class="hidden grid grid-cols-2 gap-2 pt-1">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-0.5">Vida útil (años)</label>
+                            <input type="number" min="1" max="40" id="comp-vida-util" value="4" class="w-full border rounded-xl p-2 text-xs bg-white">
+                        </div>
+                        <div class="flex items-end">
+                            <p class="text-[10px] text-slate-600 leading-tight">Se imputará linealmente en IRPF (Mod. 130) a razón de 1/4 de cuota anual por trimestre.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div><label class="block text-xs font-bold text-slate-600">Estado de pago</label><select id="comp-estado" class="w-full border rounded-xl p-2.5 text-sm"><option value="pagado">Pagado</option><option value="pendiente">Pendiente de pago</option></select></div>
