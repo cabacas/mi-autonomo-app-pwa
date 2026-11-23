@@ -36,6 +36,11 @@ import {
 } from './benchmark.js';
 
 import {
+    evaluarAlertasAutonomo,
+    construirEnlaceCorreoAlertas
+} from './alerts.js';
+
+import {
     generarHuellaVerifactu,
     descargarXMLFacturae,
     generarQRTributarioSVG
@@ -263,6 +268,7 @@ function switchTab(tabId) {
     if (tabId === 'aeat') updateAEATView();
     if (tabId === 'analisis-economico') renderAnalisisEconomicoCharts(state);
     if (tabId === 'diario-contable') renderDiarioContable();
+    if (tabId === 'alertas') renderAlertas();
     if (tabId === 'bienes-inversion') renderBienesInversion();
     if (tabId === 'posicionamiento') renderPosicionamiento();
     if (tabId === 'presupuestos') renderPresupuestos();
@@ -359,6 +365,7 @@ async function renderAll() {
     renderPresupuestos();
     renderTrimestres();
     renderVencimientos();
+    renderAlertas();
     actualizarKPIs();
 }
 
@@ -2362,6 +2369,8 @@ async function exportJSON() {
     a.href = URL.createObjectURL(blob);
     a.download = `Mi_Autonomo_Completo_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
+    state.ultimoBackupFecha = new Date().toISOString().slice(0, 10);
+    localStorage.setItem('gestor_fiscal_v5', JSON.stringify(state));
 }
 
 function importJSON() {
@@ -2590,6 +2599,82 @@ async function ejecutarRadarLocal() {
 
 
 /* ================= LIBRO DE BIENES DE INVERSIÓN, CUENTA P&G Y EXPORTACIÓN CSV AEAT ================= */
+
+/* ================= CENTRO DE ALERTAS Y ENVÍO POR CORREO ================= */
+function obtenerAlertasActivas() {
+    return evaluarAlertasAutonomo(state);
+}
+
+function renderAlertas() {
+    const inputObj = document.getElementById('alerta-objetivo-mensual');
+    const inputMail = document.getElementById('alerta-email-destino');
+    if (inputObj && document.activeElement !== inputObj) {
+        inputObj.value = String(state.perfil?.objetivoFacturacionMensual ?? 2500);
+    }
+    if (inputMail && document.activeElement !== inputMail) {
+        inputMail.value = String(state.perfil?.email ?? '');
+    }
+
+    const cont = document.getElementById('alertas-lista-container');
+    if (!cont) return;
+
+    const alertas = obtenerAlertasActivas();
+    if (!alertas.length) {
+        cont.innerHTML = '<div class="bg-white p-6 rounded-xl border text-center text-xs text-slate-400">No hay alertas activas en este momento.</div>';
+        return;
+    }
+
+    cont.innerHTML = alertas.map(a => {
+        const cls = a.nivel === 'critica'
+            ? 'bg-rose-50 border-rose-200 text-rose-950'
+            : (a.nivel === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-amber-50 border-amber-200 text-amber-950');
+        const badgeCls = a.nivel === 'critica'
+            ? 'bg-rose-600 text-white'
+            : (a.nivel === 'ok' ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-slate-950');
+        return `<article class="rounded-xl border p-4 ${cls} space-y-1">
+            <div class="flex items-center justify-between gap-2">
+                <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${badgeCls}">${a.categoria}</span>
+            </div>
+            <h3 class="font-extrabold text-sm text-slate-900 pt-0.5">${a.titulo}</h3>
+            <p class="text-xs leading-relaxed opacity-90">${a.detalle}</p>
+        </article>`;
+    }).join('');
+}
+
+function guardarAjustesAlertas() {
+    const obj = Number(document.getElementById('alerta-objetivo-mensual')?.value);
+    const mail = String(document.getElementById('alerta-email-destino')?.value || '').trim();
+    state.perfil.objetivoFacturacionMensual = obj > 0 ? obj : 2500;
+    if (mail) state.perfil.email = mail;
+    saveStorage();
+    alert('Ajustes de alertas guardados.');
+}
+
+async function enviarAlertasPorEmail() {
+    const mailInput = document.getElementById('alerta-email-destino')?.value.trim();
+    if (mailInput) state.perfil.email = mailInput;
+    const alertas = obtenerAlertasActivas();
+    const anioAct = String(state.ejercicioActivo || new Date().getFullYear());
+    const hrefMailto = construirEnlaceCorreoAlertas(state.perfil, alertas, anioAct);
+
+    // En móvil con Web Share API permite enviar directo a apps de correo/mensajería; en escritorio abre mailto:
+    const textoPlano = alertas.map(a => `[${a.categoria}] ${a.titulo} - ${a.detalle}`).join('
+
+');
+    if (navigator.share && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        try {
+            await navigator.share({
+                title: `Alertas Mi Autónomo (${anioAct})`,
+                text: textoPlano
+            });
+            return;
+        } catch {
+            // Si el usuario cancela o falla share, caer a mailto:
+        }
+    }
+    window.location.href = hrefMailto;
+}
+
 function renderBienesInversion() {
     const anioAct = String(state.ejercicioActivo || 2026);
     const bienes = (state.gastos || []).filter(g => g.esBienInversion);
@@ -2824,6 +2909,9 @@ Object.assign(window, {
     renderBienesInversion,
     imprimirCuentaPyG,
     exportarLibroCSV,
+    renderAlertas,
+    guardarAjustesAlertas,
+    enviarAlertasPorEmail,
     toggleCamposAmortizacion,
     renderPosicionamiento,
     ejecutarRadarLocal,
